@@ -92,6 +92,17 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 ## Recurring Errors & Fixes
 
 - **2026-09-19** — `column "cost_usd" does not exist` (500 on run start, 6 `*.it.test.ts` failures) meant the Drizzle schema and migrations had drifted: starter migration `0009` drops `agent_runs.cost_usd`, and the HW-1 cost/findings-count feature re-declared `costUsd` + `criticalCount`/`warningCount`/`suggestionCount` in `src/db/schema/runs.ts` without a migration. Fixed with `0010_worthless_slipstream.sql` (+ `0011_glamorous_night_thrasher.sql` for `agent_skills.enabled`) from `pnpm db:generate`, then hand-edited to `ADD COLUMN IF NOT EXISTS` — a dev DB migrated by another branch already has these columns, `scripts/dev.sh` runs `db:migrate` on every start, and a plain `ADD COLUMN` aborts it with `column "cost_usd" of relation "agent_runs" already exists` (verified: both a fresh DB and a DB whose journal lacks the two rows now migrate cleanly); after any schema edit, run `pnpm db:generate` and expect "No schema changes" before committing. Evidence: `src/db/migrations/0010_worthless_slipstream.sql`.
+  - **2026-09-20** — Recurred on `0012_salty_clea.sql` (`conventions.category`
+    / `evidence_line`): `pnpm db:migrate` failed with `column "evidence_line"
+    of relation "conventions" already exists` (code 42701) because the dev DB
+    had been migrated from another branch. Same fix — hand-edit the generated
+    file to `ADD COLUMN IF NOT EXISTS`. `evidence_line` / `category` already
+    existed in that dev DB; `accepted` was missing there, so 0012 also adds it
+    (`IF NOT EXISTS`). `db:generate` never emits `IF NOT EXISTS`, so expect
+    to do this for every new ADD COLUMN migration while dev DBs are shared
+    across branches. The test container prints the resulting `NOTICE …
+    already exists, skipping` on every `*.it.test.ts` run; it is not an
+    error.
 
 - **2026-09-19** — The API now binds `127.0.0.1` (`API_HOST`, default in `src/platform/config.ts`) instead of `0.0.0.0`, because it has no auth and `PUT /settings` / `POST /settings/test-connection` can overwrite provider keys; set `API_HOST=0.0.0.0` only for a container. `parseRepoUrl` is anchored to `https://github.com/` or `git@github.com:` and `SimpleGitClient.clonePathFor` refuses paths outside `cloneDir` (owner `..` used to reach `rm -rf`). Evidence: `test/repos-helpers.test.ts`.
 
