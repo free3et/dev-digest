@@ -229,15 +229,58 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'errors',
+  'testing',
+  'imports',
+  'typing',
+  'api',
+  'general',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
 export const ConventionCandidate = z.object({
   id: z.string(),
   rule: z.string(),
   evidence_path: z.string(),
   evidence_snippet: z.string(),
+  /** 1-based line of the evidence as verified by code (never the model's claim). */
+  evidence_line: z.number().int().positive().nullable(),
+  category: ConventionCategory,
   confidence: z.number().min(0).max(1),
   accepted: z.boolean(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/** Scan result: `dropped_ungrounded` counts proposals the grounding gate rejected. */
+export const ConventionExtractResult = z.object({
+  candidates: z.array(ConventionCandidate),
+  proposed: z.number().int(),
+  dropped_ungrounded: z.number().int(),
+});
+export type ConventionExtractResult = z.infer<typeof ConventionExtractResult>;
+
+/** PATCH /conventions/:id — accept and/or edit. */
+export const ConventionUpdate = z
+  .object({
+    accepted: z.boolean(),
+    rule: z.string().trim().min(1),
+    category: ConventionCategory,
+  })
+  .partial();
+export type ConventionUpdate = z.infer<typeof ConventionUpdate>;
+
+/** The un-persisted `repo-conventions` skill built from accepted rows only. */
+export const ConventionSkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  body: z.string(),
+  evidence_files: z.array(z.string()),
+  convention_ids: z.array(z.string()),
+});
+export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
