@@ -8,6 +8,7 @@ import {
   type SkillStats,
   type SkillStatsSummary,
   type SkillImportPreview,
+  type SkillVersion,
 } from '@devdigest/shared';
 import type { SkillRow } from '../../db/rows.js';
 import type { SkillFindingUsage, SkillLinkUsage, SkillRunUsage } from './repository.js';
@@ -35,6 +36,11 @@ export function toSkillDto(row: SkillRow): Skill {
     version: row.version,
     evidence_files: row.evidenceFiles ?? null,
   };
+}
+
+export function toSkillVersionDto(row: { version: number; body: string; createdAt: Date | string }): SkillVersion {
+  const created = row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt);
+  return { version: row.version, body: row.body, created_at: created };
 }
 
 interface Frontmatter {

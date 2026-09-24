@@ -1,9 +1,9 @@
 import { SKILL_STATS_WINDOW_DAYS } from '@devdigest/shared';
-import type { Skill, SkillStats, SkillStatsSummary, SkillImportPreview, SkillImportRequest, SkillInput, SkillUpdate } from '@devdigest/shared';
+import type { Skill, SkillStats, SkillStatsSummary, SkillImportPreview, SkillImportRequest, SkillInput, SkillUpdate, SkillVersion } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import { AppError } from '../../platform/errors.js';
 import { MAX_UPLOAD_BYTES } from './constants.js';
-import { buildImportPreview, computeSkillStats, toSkillDto, toStatsSummary } from './helpers.js';
+import { buildImportPreview, computeSkillStats, toSkillDto, toSkillVersionDto, toStatsSummary } from './helpers.js';
 
 /**
  * Skills use cases. The database is the source of truth: nothing is cached and an
@@ -71,6 +71,11 @@ export class SkillsService {
 
   async remove(workspaceId: string, id: string): Promise<boolean> {
     return this.repo.delete(workspaceId, id);
+  }
+
+  async listVersions(workspaceId: string, id: string): Promise<SkillVersion[] | undefined> {
+    const rows = await this.repo.listVersions(workspaceId, id);
+    return rows?.map(toSkillVersionDto);
   }
 
   /** Parse an uploaded .md/.zip into a preview. Stores nothing. */

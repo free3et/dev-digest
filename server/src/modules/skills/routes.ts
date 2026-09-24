@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { Skill, SkillImportPreview, SkillStats, SkillStatsSummary, SkillImportRequest, SkillInput, SkillUpdate } from '@devdigest/shared';
+import { Skill, SkillImportPreview, SkillStats, SkillStatsSummary, SkillImportRequest, SkillInput, SkillUpdate, SkillVersion } from '@devdigest/shared';
 import { z } from 'zod';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -14,6 +14,7 @@ import { SkillsService } from './service.js';
  *   GET    /skills/stats           → SkillStatsSummary[] for every skill (list footers, last 30d)
  *   GET    /skills/:id             → one skill
  *   GET    /skills/:id/stats       → SkillStats for the Stats tab (404 when unknown)
+ *   GET    /skills/:id/versions    → body history, newest first
  *   PUT    /skills/:id             → update fields / `enabled` (a body change bumps `version`)
  *   DELETE /skills/:id             → delete (agent links cascade)
  *   POST   /skills/import/preview  → parse a .md/.zip into a preview; STORES NOTHING
@@ -66,6 +67,17 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
       const stats = await service.stats(workspaceId, req.params.id);
       if (!stats) throw new NotFoundError('Skill not found');
       return stats;
+    },
+  );
+
+  app.get(
+    '/skills/:id/versions',
+    { schema: { params: IdParams, response: { 200: z.array(SkillVersion) } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const versions = await service.listVersions(workspaceId, req.params.id);
+      if (!versions) throw new NotFoundError('Skill not found');
+      return versions;
     },
   );
 

@@ -194,4 +194,15 @@ export class SkillsRepository {
       .returning({ id: t.skills.id });
     return rows.length > 0;
   }
+
+  /** Body history, newest first. Empty when the skill is not in this workspace. */
+  async listVersions(workspaceId: string, id: string): Promise<{ version: number; body: string; createdAt: Date }[] | undefined> {
+    const skill = await this.getById(workspaceId, id);
+    if (!skill) return undefined;
+    return this.db
+      .select({ version: t.skillVersions.version, body: t.skillVersions.body, createdAt: t.skillVersions.createdAt })
+      .from(t.skillVersions)
+      .where(eq(t.skillVersions.skillId, id))
+      .orderBy(desc(t.skillVersions.version));
+  }
 }

@@ -137,6 +137,14 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+/** One immutable body snapshot (`skill_versions`). Newest first on the list. */
+export const SkillVersion = z.object({
+  version: z.number().int().positive(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
 // Write-side shapes for the skills module. The description is the skill's
 // interface (when to use it) — kept directive and short so an agent can decide.
 export const SKILL_NAME_MAX = 80;

@@ -129,6 +129,12 @@ d('skills module (Testcontainers pg)', () => {
     expect(toggled.json()).toMatchObject({ enabled: false, version: 2 }); // no body change ⇒ no bump
     const versions = await pg.handle.db.select().from(t.skillVersions).where(eq(t.skillVersions.skillId, skill.id));
     expect(versions.map((v) => v.version).sort()).toEqual([1, 2]);
+    const listed = (await app.inject({ method: 'GET', url: `/skills/${skill.id}/versions` })).json() as Array<{
+      version: number;
+      body: string;
+    }>;
+    expect(listed.map((v) => v.version)).toEqual([2, 1]);
+    expect(listed[1]!.body).toBe('v1 body');
 
     expect((await app.inject({ method: 'GET', url: `/skills/${skill.id}` })).json().body).toBe('v2 body');
     expect((await app.inject({ method: 'DELETE', url: `/skills/${skill.id}` })).statusCode).toBe(204);
