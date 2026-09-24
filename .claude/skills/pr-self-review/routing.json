@@ -1,0 +1,249 @@
+{
+  "version": "1.0.0",
+  "base_candidates": [
+    "origin/main",
+    "main"
+  ],
+  "exclude": [
+    "server/clones/**",
+    "**/node_modules/**",
+    "**/pnpm-lock.yaml",
+    "**/package-lock.json",
+    "**/src/vendor/ui/**",
+    "server/src/db/migrations/meta/**",
+    "**/*.tsbuildinfo",
+    "**/dist/**",
+    "**/.next/**",
+    ".claude/pr-self-review/**"
+  ],
+  "rules": [
+    {
+      "id": "client-app",
+      "glob": [
+        "client/src/app/**"
+      ],
+      "skills": [
+        "frontend-ui-architecture",
+        "react-best-practices",
+        "next-best-practices",
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "client-shared",
+      "glob": [
+        "client/src/components/**",
+        "client/src/lib/**",
+        "client/src/i18n/**"
+      ],
+      "skills": [
+        "frontend-ui-architecture",
+        "react-best-practices",
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "client-tests",
+      "glob": [
+        "client/**/*.test.ts",
+        "client/**/*.test.tsx",
+        "client/src/test/**"
+      ],
+      "skills": [
+        "react-testing-library"
+      ]
+    },
+    {
+      "id": "client-i18n",
+      "glob": [
+        "client/messages/**"
+      ],
+      "skills": [
+        "frontend-ui-architecture"
+      ]
+    },
+    {
+      "id": "server-routes",
+      "glob": [
+        "server/src/modules/**/routes.ts",
+        "server/src/app.ts",
+        "server/src/server.ts"
+      ],
+      "skills": [
+        "onion-architecture",
+        "fastify-best-practices",
+        "zod",
+        "security"
+      ]
+    },
+    {
+      "id": "server-service-helpers",
+      "glob": [
+        "server/src/modules/**/service.ts",
+        "server/src/modules/**/helpers.ts",
+        "server/src/modules/**/run-executor.ts",
+        "server/src/modules/**/constants.ts",
+        "server/src/modules/**/types.ts"
+      ],
+      "skills": [
+        "onion-architecture",
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "server-repository",
+      "glob": [
+        "server/src/modules/**/repository.ts",
+        "server/src/modules/**/repository/**"
+      ],
+      "skills": [
+        "onion-architecture",
+        "drizzle-orm-patterns",
+        "postgresql-table-design"
+      ]
+    },
+    {
+      "id": "server-db-schema",
+      "glob": [
+        "server/src/db/schema/**",
+        "server/src/db/schema.ts",
+        "server/src/db/rows.ts",
+        "server/src/db/client.ts"
+      ],
+      "skills": [
+        "drizzle-orm-patterns",
+        "postgresql-table-design",
+        "onion-architecture"
+      ],
+      "checks": [
+        "schema-needs-migration"
+      ]
+    },
+    {
+      "id": "server-migrations",
+      "glob": [
+        "server/src/db/migrations/**",
+        "server/drizzle/**"
+      ],
+      "skills": [
+        "postgresql-table-design"
+      ],
+      "checks": [
+        "migration-hygiene"
+      ]
+    },
+    {
+      "id": "server-infra",
+      "glob": [
+        "server/src/adapters/**",
+        "server/src/platform/**"
+      ],
+      "skills": [
+        "onion-architecture",
+        "security",
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "shared-contracts",
+      "glob": [
+        "server/src/vendor/shared/**",
+        "client/src/vendor/shared/**"
+      ],
+      "skills": [
+        "zod",
+        "typescript-expert"
+      ],
+      "checks": [
+        "contract-sync"
+      ]
+    },
+    {
+      "id": "server-tests",
+      "glob": [
+        "server/test/**",
+        "server/src/**/*.test.ts"
+      ],
+      "skills": [
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "reviewer-core",
+      "glob": [
+        "reviewer-core/src/**"
+      ],
+      "skills": [
+        "onion-architecture",
+        "zod",
+        "typescript-expert"
+      ]
+    },
+    {
+      "id": "e2e",
+      "glob": [
+        "e2e/**"
+      ],
+      "skills": [],
+      "notes": [
+        "Read e2e/README.md; flows are black-box and must not import server or client source."
+      ]
+    },
+    {
+      "id": "security-any-code",
+      "glob": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.mjs",
+        "**/*.cjs",
+        "**/*.sh",
+        "docker-compose.yml",
+        ".github/**"
+      ],
+      "skills": [
+        "security"
+      ],
+      "checks": [
+        "secrets-scan"
+      ]
+    },
+    {
+      "id": "docs-and-skills",
+      "glob": [
+        "docs/**",
+        "**/*.md",
+        ".claude/skills/**",
+        "**/INSIGHTS.md"
+      ],
+      "skills": [],
+      "notes": [],
+      "docs_only": true
+    }
+  ],
+  "packages": {
+    "server": {
+      "dir": "server",
+      "pm": "pnpm",
+      "typecheck": "pnpm typecheck",
+      "test": "pnpm test"
+    },
+    "client": {
+      "dir": "client",
+      "pm": "pnpm",
+      "typecheck": "pnpm typecheck",
+      "test": "pnpm test"
+    },
+    "reviewer-core": {
+      "dir": "reviewer-core",
+      "pm": "npm",
+      "typecheck": "npm run typecheck",
+      "test": "npm test"
+    },
+    "e2e": {
+      "dir": "e2e",
+      "pm": "npm",
+      "typecheck": "npm run typecheck",
+      "test": null
+    }
+  }
+}
