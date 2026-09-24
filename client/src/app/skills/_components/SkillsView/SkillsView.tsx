@@ -1,24 +1,30 @@
-/* /skills — master–detail: searchable skill list (left) + selected skill with Config / Preview / Stats (right). */
+/* /skills — master–detail: searchable skill list (left) + selected skill with Config / Preview / Stats / Versions (right). */
 "use client";
 
 import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { EmptyState, Skeleton } from "@devdigest/ui";
+import type { Skill } from "@devdigest/shared";
 import { AppShell } from "@/components/app-shell";
-import { useSkills } from "@/lib/hooks/skills";
+import { getErrorMessage, useDeleteSkill, useSkills } from "@/lib/hooks/skills";
+import { useToast } from "@/lib/toast";
 import { SkillDetail, parseSkillTab, type SkillTab } from "../SkillDetail";
 import { SkillEditorDrawer, type EditorTabKey } from "./_components/SkillEditorDrawer";
 import { SkillList } from "./_components/SkillList";
+import { DeleteSkillModal } from "./_components/DeleteSkillModal";
 import { buildSkillsHref, resolveSelectedId } from "./helpers";
 import { s } from "./styles";
 
 export function SkillsView() {
   const t = useTranslations("skills");
+  const toast = useToast();
   const router = useRouter();
   const params = useSearchParams();
   const { data: skills, isLoading, isError, refetch } = useSkills();
+  const del = useDeleteSkill();
   const [drawer, setDrawer] = React.useState<EditorTabKey | null>(null);
+  const [pendingDelete, setPendingDelete] = React.useState<Skill | null>(null);
 
   const list = skills ?? [];
   const selectedId = resolveSelectedId(list, params.get("id"));
@@ -29,10 +35,30 @@ export function SkillsView() {
 
   const afterDelete = (deletedId: string) => go(list.find((sk) => sk.id !== deletedId)?.id ?? null, tab);
 
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    del.mutate(pendingDelete.id, {
+      onSuccess: () => {
+        toast.success(t("page.deleted"));
+        afterDelete(pendingDelete.id);
+        setPendingDelete(null);
+      },
+      onError: (err) => toast.error(getErrorMessage(err, t("preview.deleteFailed"))),
+    });
+  };
+
   return (
     <AppShell crumb={[{ label: t("page.crumbLab") }, { label: t("page.crumbSkills") }]}>
       {drawer && (
         <SkillEditorDrawer initialTab={drawer} onClose={() => setDrawer(null)} onCreated={(sk) => go(sk.id, "config")} />
+      )}
+      {pendingDelete && (
+        <DeleteSkillModal
+          name={pendingDelete.name}
+          busy={del.isPending}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
       )}
       <div style={s.layout}>
         <SkillList
@@ -43,6 +69,7 @@ export function SkillsView() {
           selectedId={selectedId}
           onSelect={(id) => go(id, tab)}
           onAdd={setDrawer}
+          onAskDelete={setPendingDelete}
         />
         <main style={s.detail}>
           {isLoading && (
@@ -67,7 +94,7 @@ export function SkillsView() {
               skill={selected}
               tab={tab}
               onTabChange={(next) => go(selected.id, next)}
-              onDeleted={afterDelete}
+              onAskDelete={() => setPendingDelete(selected)}
             />
           )}
         </main>

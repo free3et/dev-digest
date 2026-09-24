@@ -1,7 +1,7 @@
 /* hooks/skills.ts — React Query hooks for the Skills page and the agent Skills tab. */
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
 import type {
   AgentSkillLink,
@@ -11,6 +11,7 @@ import type {
   SkillInput,
   SkillStatsSummary,
   SkillUpdate,
+  SkillVersion,
 } from "@devdigest/shared";
 
 /** User-presentable message for a failed mutation/query (keeps ApiError out of components). */
@@ -54,6 +55,7 @@ export function useUpdateSkill() {
     onSuccess: (_d, { id }) => {
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.invalidateQueries({ queryKey: ["skill", id] });
+      qc.invalidateQueries({ queryKey: ["skill-versions", id] });
     },
   });
 }
@@ -65,6 +67,7 @@ export function useDeleteSkill() {
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["skills"] });
       qc.removeQueries({ queryKey: ["skill", id] });
+      qc.removeQueries({ queryKey: ["skill-versions", id] });
       qc.invalidateQueries({ queryKey: ["agent-skills"] });
     },
   });
@@ -76,6 +79,30 @@ export function useImportPreview() {
     mutationFn: (req: SkillImportRequest) =>
       api.post<SkillImportPreview>("/skills/import/preview", req),
   });
+}
+
+export function useSkillVersions(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["skill-versions", id],
+    queryFn: () => api.get<SkillVersion[]>(`/skills/${id}/versions`),
+    enabled: !!id,
+  });
+}
+
+/** Linked-skill counts for agent cards. Each id hits GET /agents/:id/skills. */
+export function useAgentSkillCounts(agentIds: readonly string[]): Record<string, number | undefined> {
+  const results = useQueries({
+    queries: agentIds.map((id) => ({
+      queryKey: ["agent-skills", id] as const,
+      queryFn: () => api.get<AgentSkillLink[]>(`/agents/${id}/skills`),
+    })),
+  });
+  const out: Record<string, number | undefined> = {};
+  agentIds.forEach((id, i) => {
+    const data = results[i]?.data;
+    out[id] = data ? data.length : undefined;
+  });
+  return out;
 }
 
 export function useAgentSkills(agentId: string | null | undefined) {
@@ -101,6 +128,19 @@ export function useSetAgentSkills(agentId: string) {
     mutationFn: (skillIds: string[]) =>
       api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_ids: skillIds }),
     onSuccess: store,
+  });
+}
+
+/** Additive link of one skill. Never send `{ skill_ids }` — that replaces the whole set. */
+export function useLinkAgentSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, skillId }: { agentId: string; skillId: string }) =>
+      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_id: skillId }),
+    onSuccess: (_links, { agentId }) => {
+      qc.invalidateQueries({ queryKey: ["agent-skills", agentId] });
+      qc.invalidateQueries({ queryKey: ["agents"] });
+    },
   });
 }
 

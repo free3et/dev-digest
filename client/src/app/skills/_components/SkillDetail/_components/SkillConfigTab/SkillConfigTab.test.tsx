@@ -22,10 +22,10 @@ const SKILL: Skill = {
   version: 5,
 };
 
-const setup = (routes: Record<string, unknown> = {}, onDeleted = vi.fn()) => {
+const setup = (routes: Record<string, unknown> = {}, onAskDelete = vi.fn()) => {
   const calls = mockFetch(routes);
-  renderWithProviders(<SkillConfigTab skill={SKILL} onDeleted={onDeleted} />);
-  return { calls, onDeleted };
+  renderWithProviders(<SkillConfigTab skill={SKILL} onAskDelete={onAskDelete} />);
+  return { calls, onAskDelete };
 };
 const nameInput = () => screen.getByLabelText(/^Name/);
 const bodyInput = () => screen.getByLabelText(/^Skill body/);
@@ -98,13 +98,10 @@ describe("SkillConfigTab", () => {
     expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ enabled: false });
   });
 
-  it("Delete asks for confirmation, then calls onDeleted", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { calls, onDeleted } = setup({ "DELETE /skills/s1": {} });
+  it("Delete asks the parent to confirm instead of calling the API", async () => {
+    const { calls, onAskDelete } = setup();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onAskDelete).toHaveBeenCalledTimes(1);
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("s1"));
-    expect(confirm).toHaveBeenCalledTimes(2);
   });
 });

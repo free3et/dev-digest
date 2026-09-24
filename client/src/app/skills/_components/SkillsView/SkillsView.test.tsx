@@ -36,6 +36,10 @@ vi.mock("next/navigation", async () => {
 
 import { SkillsView } from "./SkillsView";
 
+const card = (name: string) => screen.getByRole("button", { name: (n) => n === name });
+const findCard = (name: string) => screen.findByRole("button", { name: (n) => n === name });
+const queryCard = (name: string) => screen.queryByRole("button", { name: (n) => n === name });
+
 beforeEach(() => {
   nav.replace.mockClear();
   nav.set("");
@@ -66,12 +70,12 @@ describe("SkillsView list", () => {
   it("renders cards with stats footers (dash for nulls, singular/plural)", async () => {
     mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    const first = (await screen.findByRole("button", { name: /test-quality/ })) as HTMLElement;
+    const first = (await findCard("test-quality")) as HTMLElement;
     expect(await within(first).findByText("3 agents")).toBeInTheDocument();
     expect(within(first).getByText("71% pull")).toBeInTheDocument();
     expect(within(first).getByText("74% accept")).toBeInTheDocument();
     expect(within(first).getByText("Manual")).toBeInTheDocument();
-    const second = screen.getByRole("button", { name: /api-contract/ });
+    const second = card("api-contract");
     expect(within(second).getByText("1 agent")).toBeInTheDocument();
     expect(within(second).getByText("— pull")).toBeInTheDocument();
     expect(within(second).getByText("— accept")).toBeInTheDocument();
@@ -84,13 +88,13 @@ describe("SkillsView list", () => {
     renderWithProviders(<SkillsView />);
     const detail = await screen.findByRole("region", { name: "test-quality" });
     expect(within(detail).getByText("Configuration")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /test-quality/ })).toHaveAttribute("aria-current", "true");
+    expect(card("test-quality")).toHaveAttribute("aria-current", "true");
   });
 
   it("clicking a card updates the URL and shows that skill's detail", async () => {
     mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    await userEvent.click(await screen.findByRole("button", { name: /api-contract/ }));
+    await userEvent.click(await findCard("api-contract"));
     expect(nav.replace).toHaveBeenCalledWith("/skills?id=s2&tab=config");
     const detail = await screen.findByRole("region", { name: "api-contract" });
     expect(within(detail).getAllByText("v2").length).toBeGreaterThan(0);
@@ -109,7 +113,7 @@ describe("SkillsView list", () => {
   it("the enabled switch on a card PUTs { enabled }", async () => {
     const calls = mockFetch({ ...ROUTES, "PUT /skills/s1": { ...SKILL, enabled: false } });
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     const group = screen.getAllByRole("group", { name: "Enable skill test-quality" })[0]!;
     fireEvent.click(within(group).getByRole("switch"));
     await waitFor(() => expect(calls.find((c) => c.method === "PUT")).toBeDefined());
@@ -119,10 +123,10 @@ describe("SkillsView list", () => {
   it("filters by search", async () => {
     mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     await userEvent.type(screen.getByPlaceholderText("Search skills…"), "routes");
-    expect(screen.queryByRole("button", { name: /test-quality/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /api-contract/ })).toBeInTheDocument();
+    expect(queryCard("test-quality")).not.toBeInTheDocument();
+    expect(card("api-contract")).toBeInTheDocument();
   });
 
   it("shows an empty state", async () => {
@@ -137,14 +141,44 @@ describe("SkillsView list", () => {
     expect(await screen.findByText("Could not load skills.")).toBeInTheDocument();
   });
 
-  it("deleting the selected skill selects another one", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("deleting the selected skill selects another one after the modal confirm", async () => {
     nav.set("id=s1&tab=config");
     mockFetch({ ...ROUTES, "DELETE /skills/s1": {} });
     renderWithProviders(<SkillsView />);
     await screen.findByRole("region", { name: "test-quality" });
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/permanently removed/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/skills?id=s2&tab=config"));
+  });
+
+  it("the card trash icon opens the same delete modal", async () => {
+    mockFetch(ROUTES);
+    renderWithProviders(<SkillsView />);
+    await findCard("test-quality");
+    await userEvent.click(screen.getByRole("button", { name: "Delete skill test-quality" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("test-quality");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("the Versions tab lists snapshots and Restore PUTs the old body", async () => {
+    nav.set("id=s1&tab=versions");
+    const calls = mockFetch({
+      ...ROUTES,
+      "GET /skills/s1/versions": [
+        { version: 5, body: SKILL.body, created_at: "2026-09-20T10:00:00.000Z" },
+        { version: 4, body: "# older", created_at: "2026-09-19T10:00:00.000Z" },
+      ],
+      "PUT /skills/s1": { ...SKILL, version: 6, body: "# older" },
+    });
+    renderWithProviders(<SkillsView />);
+    expect(await screen.findByText("Version history")).toBeInTheDocument();
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")).toBeDefined());
+    expect(calls.find((c) => c.method === "PUT")).toMatchObject({ path: "/skills/s1", body: { body: "# older" } });
   });
 });
 
@@ -152,7 +186,7 @@ describe("Add Skill menu and drawer", () => {
   it("offers Create and Import from file", async () => {
     mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     await userEvent.click(screen.getByText("Add Skill"));
     expect(screen.getByText("Create skill")).toBeInTheDocument();
     expect(screen.getByText("Import from file")).toBeInTheDocument();
@@ -162,7 +196,7 @@ describe("Add Skill menu and drawer", () => {
   it("create form validates and explains the description as a directive", async () => {
     const calls = mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     await userEvent.click(screen.getByText("Add Skill"));
     await userEvent.click(screen.getByText("Create skill"));
     expect(within(screen.getByRole("dialog")).getByText(/skill’s interface/)).toBeInTheDocument();
@@ -188,7 +222,7 @@ describe("Add Skill menu and drawer", () => {
       "POST /skills": { ...SKILL, id: "s9", name: "imported-rubric" },
     });
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     await userEvent.click(screen.getByText("Add Skill"));
     await userEvent.click(screen.getByText("Import from file"));
 
@@ -216,7 +250,7 @@ describe("Add Skill menu and drawer", () => {
   it("rejects an oversize or wrong-type upload client-side", async () => {
     const calls = mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
-    await screen.findByRole("button", { name: /test-quality/ });
+    await findCard("test-quality");
     await userEvent.click(screen.getByText("Add Skill"));
     await userEvent.click(screen.getByText("Import from file"));
     const input = screen.getByLabelText("Skill file") as HTMLInputElement;

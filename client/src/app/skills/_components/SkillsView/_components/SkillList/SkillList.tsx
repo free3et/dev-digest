@@ -20,9 +20,10 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd: (tab: EditorTabKey) => void;
+  onAskDelete: (skill: Skill) => void;
 }
 
-export function SkillList({ skills, isLoading, isError, onRetry, selectedId, onSelect, onAdd }: Props) {
+export function SkillList({ skills, isLoading, isError, onRetry, selectedId, onSelect, onAdd, onAskDelete }: Props) {
   const t = useTranslations("skills");
   const toast = useToast();
   const update = useUpdateSkill();
@@ -88,6 +89,7 @@ export function SkillList({ skills, isLoading, isError, onRetry, selectedId, onS
             active={sk.id === selectedId}
             onOpen={() => onSelect(sk.id)}
             onToggle={(enabled) => toggle(sk.id, enabled)}
+            onAskDelete={() => onAskDelete(sk)}
           />
         ))}
       </div>

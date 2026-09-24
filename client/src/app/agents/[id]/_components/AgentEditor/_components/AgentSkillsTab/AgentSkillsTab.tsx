@@ -1,13 +1,14 @@
-/* Skills tab of the agent editor: attach, enable per agent, and reorder skills.
-   Order = order of the skill blocks in the assembled prompt. */
+/* Skills tab of the agent editor: every system skill with a toggle to attach,
+   type label, and reorder for linked skills (order = prompt block order). */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Button, EmptyState, ErrorState, Icon, IconBtn, Skeleton } from "@devdigest/ui";
+import { Badge, EmptyState, ErrorState, Icon, IconBtn, Skeleton } from "@devdigest/ui";
 import {
   getErrorMessage,
   useAgentSkills,
+  useLinkAgentSkill,
   useSetAgentSkills,
   useSkills,
   useUnlinkAgentSkill,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/hooks/skills";
 import { SKILL_TYPE_COLOR, filterSkills } from "@/lib/skills";
 import { useToast } from "@/lib/toast";
-import { enabledTokens, joinLinks, moveById, moveToTarget } from "./helpers";
+import { allSkillRows, enabledTokens, moveById, moveToTarget } from "./helpers";
 import { s } from "./styles";
 
 export function AgentSkillsTab({ agentId }: { agentId: string }) {
@@ -25,10 +26,10 @@ export function AgentSkillsTab({ agentId }: { agentId: string }) {
   const links = useAgentSkills(agentId);
   const skills = useSkills();
   const setSkills = useSetAgentSkills(agentId);
+  const linkSkill = useLinkAgentSkill();
   const updateLink = useUpdateAgentSkillLink(agentId);
   const unlink = useUnlinkAgentSkill(agentId);
   const [filter, setFilter] = React.useState("");
-  const [picking, setPicking] = React.useState(false);
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overId, setOverId] = React.useState<string | null>(null);
 
@@ -37,17 +38,27 @@ export function AgentSkillsTab({ agentId }: { agentId: string }) {
   }
   if (links.isLoading || skills.isLoading) return <Skeleton height={120} />;
 
-  const rows = joinLinks(links.data ?? [], skills.data ?? []);
-  const ids = rows.map((r) => r.skill.id);
+  const rows = allSkillRows(links.data ?? [], skills.data ?? []);
+  const linkedIds = rows.filter((r) => r.link).map((r) => r.skill.id);
   const visibleIds = new Set(filterSkills(rows.map((r) => r.skill), filter).map((sk) => sk.id));
-  const enabledCount = rows.filter((r) => r.link.enabled).length;
+  const enabledCount = rows.filter((r) => r.link?.enabled).length;
   const tokens = enabledTokens(rows);
-  const linked = new Set(ids);
-  const unlinked = (skills.data ?? []).filter((sk) => !linked.has(sk.id));
 
   const onError = (err: unknown) => toast.error(getErrorMessage(err, t("skillsTab.updateFailed")));
   const reorder = (next: string[]) => {
-    if (next.join() !== ids.join()) setSkills.mutate(next, { onError });
+    if (next.join() !== linkedIds.join()) setSkills.mutate(next, { onError });
+  };
+
+  const onToggle = (skillId: string, checked: boolean, linked: boolean, linkEnabled: boolean) => {
+    if (checked) {
+      if (!linked) {
+        linkSkill.mutate({ agentId, skillId }, { onError });
+      } else if (!linkEnabled) {
+        updateLink.mutate({ skillId, patch: { enabled: true } }, { onError });
+      }
+      return;
+    }
+    if (linked) unlink.mutate(skillId, { onError });
   };
 
   return (
@@ -66,9 +77,6 @@ export function AgentSkillsTab({ agentId }: { agentId: string }) {
             style={s.filterInput}
           />
         </div>
-        <Button kind="primary" size="sm" icon="Plus" onClick={() => setPicking((p) => !p)}>
-          {t("skillsTab.addSkill")}
-        </Button>
       </div>
       <p style={s.hint}>{t("skillsTab.orderHint")}</p>
       {tokens > 0 && <div style={s.tokens}>{t("skillsTab.tokens", { count: tokens })}</div>}
@@ -77,24 +85,29 @@ export function AgentSkillsTab({ agentId }: { agentId: string }) {
         <EmptyState icon="Zap" title={t("skillsTab.title")} body={t("skillsTab.empty")} />
       ) : (
         <ul style={s.list}>
-          {rows.map(({ link, skill }, i) =>
-            !visibleIds.has(skill.id) ? null : (
+          {rows.map(({ link, skill }) => {
+            if (!visibleIds.has(skill.id)) return null;
+            const linked = !!link;
+            const canReorder = !!link?.enabled;
+            const linkedIndex = linkedIds.indexOf(skill.id);
+            return (
               <li
                 key={skill.id}
-                draggable
+                draggable={canReorder}
                 onDragStart={(e) => {
+                  if (!canReorder) return;
                   setDragId(skill.id);
                   e.dataTransfer.effectAllowed = "move";
                   e.dataTransfer.setData("text/plain", skill.id);
                 }}
                 onDragOver={(e) => {
-                  if (!dragId) return;
+                  if (!dragId || !link) return;
                   e.preventDefault();
                   setOverId(skill.id);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  if (dragId) reorder(moveToTarget(ids, dragId, skill.id));
+                  if (dragId && link) reorder(moveToTarget(linkedIds, dragId, skill.id));
                   setDragId(null);
                   setOverId(null);
                 }}
@@ -104,58 +117,50 @@ export function AgentSkillsTab({ agentId }: { agentId: string }) {
                 }}
                 style={{ ...s.row, ...(overId === skill.id && dragId !== skill.id ? s.rowOver : null) }}
               >
-                <span aria-hidden style={s.handle} title={t("skillsTab.dragHandle", { name: skill.name })}>
-                  ⋮⋮
-                </span>
+                {canReorder ? (
+                  <span aria-hidden style={s.handle} title={t("skillsTab.dragHandle", { name: skill.name })}>
+                    ⋮⋮
+                  </span>
+                ) : (
+                  <span aria-hidden style={s.handleMuted} />
+                )}
                 <input
                   type="checkbox"
                   aria-label={t("skillsTab.enable", { name: skill.name })}
-                  checked={link.enabled}
-                  onChange={(e) =>
-                    updateLink.mutate({ skillId: skill.id, patch: { enabled: e.target.checked } }, { onError })
-                  }
+                  checked={!!link?.enabled}
+                  onChange={(e) => onToggle(skill.id, e.target.checked, linked, !!link?.enabled)}
                 />
                 <span className="mono" style={s.name} title={skill.name}>
                   {skill.name}
                 </span>
                 {!skill.enabled && <Badge color="var(--text-muted)">{t("skillsTab.globallyOff")}</Badge>}
                 <Badge color={SKILL_TYPE_COLOR[skill.type]}>{ts(`listItem.type.${skill.type}`)}</Badge>
-                <IconBtn
-                  icon="ArrowUp"
-                  label={t("skillsTab.moveUp", { name: skill.name })}
-                  onClick={i === 0 ? undefined : () => reorder(moveById(ids, skill.id, -1))}
-                />
-                <IconBtn
-                  icon="ArrowDown"
-                  label={t("skillsTab.moveDown", { name: skill.name })}
-                  onClick={i === rows.length - 1 ? undefined : () => reorder(moveById(ids, skill.id, 1))}
-                />
-                <IconBtn
-                  icon="X"
-                  label={t("skillsTab.unlink", { name: skill.name })}
-                  onClick={() => unlink.mutate(skill.id, { onError })}
-                />
+                {linked && (
+                  <>
+                    <IconBtn
+                      icon="ArrowUp"
+                      label={t("skillsTab.moveUp", { name: skill.name })}
+                      onClick={
+                        !canReorder || linkedIndex <= 0
+                          ? undefined
+                          : () => reorder(moveById(linkedIds, skill.id, -1))
+                      }
+                    />
+                    <IconBtn
+                      icon="ArrowDown"
+                      label={t("skillsTab.moveDown", { name: skill.name })}
+                      onClick={
+                        !canReorder || linkedIndex < 0 || linkedIndex >= linkedIds.length - 1
+                          ? undefined
+                          : () => reorder(moveById(linkedIds, skill.id, 1))
+                      }
+                    />
+                  </>
+                )}
               </li>
-            ),
-          )}
+            );
+          })}
         </ul>
-      )}
-
-      {picking && (
-        <div style={s.picker}>
-          {unlinked.length === 0 && <div style={s.muted}>{t("skillsTab.addNone")}</div>}
-          {unlinked.map((sk) => (
-            <div key={sk.id} style={s.pickerRow}>
-              <span className="mono" style={s.name}>
-                {sk.name}
-              </span>
-              <Badge color={SKILL_TYPE_COLOR[sk.type]}>{ts(`listItem.type.${sk.type}`)}</Badge>
-              <Button kind="secondary" size="sm" onClick={() => setSkills.mutate([...ids, sk.id], { onError })}>
-                {t("skillsTab.add")}
-              </Button>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );

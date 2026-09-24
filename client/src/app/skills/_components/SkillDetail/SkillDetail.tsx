@@ -1,4 +1,4 @@
-/* SkillDetail — right pane: header (icon, name, type, version) + Config / Preview / Stats tabs. */
+/* SkillDetail — right pane: header (icon, name, type, version) + Config / Preview / Stats / Versions. */
 "use client";
 
 import React from "react";
@@ -6,20 +6,21 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
 import { SKILL_TYPE_COLOR, tintOf } from "@/lib/skills";
-import { SKILL_TABS, type SkillTab } from "./constants";
+import { SKILL_TAB_ICONS, SKILL_TABS, type SkillTab } from "./constants";
 import { SkillConfigTab } from "./_components/SkillConfigTab";
 import { SkillPreviewTab } from "./_components/SkillPreviewTab";
 import { SkillStatsTab } from "./_components/SkillStatsTab";
+import { SkillVersionsTab } from "./_components/SkillVersionsTab";
 import { s } from "./styles";
 
 interface Props {
   skill: Skill;
   tab: SkillTab;
   onTabChange: (tab: SkillTab) => void;
-  onDeleted: (id: string) => void;
+  onAskDelete: () => void;
 }
 
-export function SkillDetail({ skill, tab, onTabChange, onDeleted }: Props) {
+export function SkillDetail({ skill, tab, onTabChange, onAskDelete }: Props) {
   const t = useTranslations("skills");
   const color = SKILL_TYPE_COLOR[skill.type];
   return (
@@ -42,12 +43,13 @@ export function SkillDetail({ skill, tab, onTabChange, onDeleted }: Props) {
         pad="8px 28px 0"
         value={tab}
         onChange={(k) => onTabChange(k as SkillTab)}
-        tabs={SKILL_TABS.map((key) => ({ key, label: t(`detail.tabs.${key}`) }))}
+        tabs={SKILL_TABS.map((key) => ({ key, label: t(`detail.tabs.${key}`), icon: SKILL_TAB_ICONS[key] }))}
       />
       <div style={s.body}>
-        {tab === "config" && <SkillConfigTab key={skill.id} skill={skill} onDeleted={onDeleted} />}
+        {tab === "config" && <SkillConfigTab key={skill.id} skill={skill} onAskDelete={onAskDelete} />}
         {tab === "preview" && <SkillPreviewTab skill={skill} />}
         {tab === "stats" && <SkillStatsTab skillId={skill.id} />}
+        {tab === "versions" && <SkillVersionsTab skill={skill} />}
       </div>
     </section>
   );

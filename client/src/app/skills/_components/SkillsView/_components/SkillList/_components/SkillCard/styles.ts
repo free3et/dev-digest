@@ -6,7 +6,7 @@ export const s = {
   // re-render mixes `border` with `borderColor` on the same element).
   active: { border: "1px solid var(--accent)", background: "var(--bg-hover)" } satisfies CSSProperties,
   open: { all: "unset", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8, padding: 14, width: "100%", boxSizing: "border-box" } satisfies CSSProperties,
-  top: { display: "flex", alignItems: "center", gap: 10, paddingRight: 52 } satisfies CSSProperties,
+  top: { display: "flex", alignItems: "center", gap: 10, paddingRight: 72 } satisfies CSSProperties,
   tile: (color: string, tint: string): CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
@@ -30,7 +30,8 @@ export const s = {
   } satisfies CSSProperties,
   meta: { display: "flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
   source: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  version: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
   footer: { display: "flex", gap: 12, paddingTop: 8, borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
   accept: { color: "var(--ok)", fontWeight: 600 } satisfies CSSProperties,
-  toggle: { position: "absolute", top: 14, right: 14, display: "inline-flex" } satisfies CSSProperties,
+  actions: { position: "absolute", top: 10, right: 8, display: "inline-flex", alignItems: "center", gap: 2 } satisfies CSSProperties,
 } as const;

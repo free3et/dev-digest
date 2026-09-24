@@ -35,7 +35,8 @@
     "tabs": {
       "config": "Config",
       "preview": "Preview",
-      "stats": "Stats"
+      "stats": "Stats",
+      "versions": "Versions"
     }
   },
   "drawer": {
@@ -109,8 +110,31 @@
     "deleteConfirm": "Delete skill \"{name}\"? It will be unlinked from every agent.",
     "deleteFailed": "Could not delete the skill."
   },
+  "deleteModal": {
+    "title": "Delete skill",
+    "body": "\"{name}\" will be permanently removed. This cannot be undone.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "versions": {
+    "title": "Version history",
+    "count": "{count, plural, one {# version} other {# versions}}",
+    "hint": "Every save snapshots the body so eval runs stay reproducible against the exact text they scored.",
+    "current": "Current",
+    "diff": "Diff",
+    "restore": "Restore",
+    "restored": "Restored v{version} as a new current version.",
+    "restoreFailed": "Could not restore this version.",
+    "loadError": "Could not load version history.",
+    "diffTitle": "Diff vs current",
+    "diffFrom": "v{version}",
+    "diffCurrent": "Current (v{version})",
+    "close": "Close"
+  },
   "card": {
     "enabledLabel": "Enable skill {name}",
+    "deleteLabel": "Delete skill {name}",
+    "version": "v{version}",
     "agents": "{count, plural, one {# agent} other {# agents}}",
     "pull": "{value} pull",
     "accept": "{value} accept"

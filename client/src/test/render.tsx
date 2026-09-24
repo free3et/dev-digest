@@ -6,6 +6,7 @@ import { vi } from "vitest";
 import skills from "../../messages/en/skills.json";
 import agents from "../../messages/en/agents.json";
 import skillStats from "../../messages/en/skillStats.json";
+import conventions from "../../messages/en/conventions.json";
 import { ToastProvider } from "../lib/toast";
 
 /** Render with React Query + next-intl (skills, agents) + toasts. */
@@ -13,7 +14,7 @@ export function renderWithProviders(ui: React.ReactElement): ReturnType<typeof r
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ skills, agents, skillStats }}>
+      <NextIntlClientProvider locale="en" messages={{ skills, agents, skillStats, conventions }}>
         <ToastProvider>{ui}</ToastProvider>
       </NextIntlClientProvider>
     </QueryClientProvider>,

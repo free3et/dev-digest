@@ -39,9 +39,28 @@ export function joinLinks(links: readonly AgentSkillLink[], skills: readonly Ski
     });
 }
 
+export interface SkillRow {
+  skill: Skill;
+  link: AgentSkillLink | null;
+}
+
+/** Linked skills first (by order), then unlinked alphabetically — every system skill once. */
+export function allSkillRows(links: readonly AgentSkillLink[], skills: readonly Skill[]): SkillRow[] {
+  const linked = joinLinks(links, skills);
+  const linkedIds = new Set(linked.map((r) => r.skill.id));
+  const unlinked = skills
+    .filter((sk) => !linkedIds.has(sk.id))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [
+    ...linked.map(({ skill, link }) => ({ skill, link })),
+    ...unlinked.map((skill) => ({ skill, link: null })),
+  ];
+}
+
 /** Tokens the agent's enabled skills add to the prompt (link AND skill both enabled). */
-export function enabledTokens(rows: readonly LinkedSkill[]): number {
+export function enabledTokens(rows: readonly { link: AgentSkillLink | null; skill: Skill }[]): number {
   return rows
-    .filter((r) => r.link.enabled && r.skill.enabled)
+    .filter((r) => r.link?.enabled && r.skill.enabled)
     .reduce((sum, r) => sum + estimateTokens(r.skill.body), 0);
 }

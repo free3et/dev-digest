@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { AgentSkillLink, Skill } from "@devdigest/shared";
-import { enabledTokens, joinLinks, moveById, moveToTarget } from "./helpers";
+import { allSkillRows, enabledTokens, joinLinks, moveById, moveToTarget } from "./helpers";
 
 const skill = (id: string, body = "abcd", enabled = true): Skill => ({
   id, name: id, description: "d", type: "custom", source: "manual", body, enabled, version: 1,
@@ -33,4 +33,16 @@ describe("joinLinks / enabledTokens", () => {
   const rows = joinLinks([link("b", 1), link("a", 0), link("gone", 2), link("c", 3, false)], [skill("a", "x".repeat(8)), skill("b", "x".repeat(4), false), skill("c")]);
   it("orders by link order and drops unknown skills", () => expect(rows.map((r) => r.skill.id)).toEqual(["a", "b", "c"]));
   it("counts only rows enabled on both levels", () => expect(enabledTokens(rows)).toBe(2));
+});
+
+describe("allSkillRows", () => {
+  it("puts linked skills first then unlinked alphabetically", () => {
+    const rows = allSkillRows(
+      [link("b", 0)],
+      [skill("zeta"), skill("b"), skill("alpha")],
+    );
+    expect(rows.map((r) => r.skill.id)).toEqual(["b", "alpha", "zeta"]);
+    expect(rows[0]!.link).not.toBeNull();
+    expect(rows[1]!.link).toBeNull();
+  });
 });

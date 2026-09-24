@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Card, Icon, Toggle } from "@devdigest/ui";
+import { Badge, Card, Icon, IconBtn, Toggle } from "@devdigest/ui";
 import type { Skill, SkillStatsSummary } from "@devdigest/shared";
 import { SKILL_SOURCE_ICON, SKILL_TYPE_COLOR, formatRate, tintOf } from "@/lib/skills";
 import { s } from "./styles";
@@ -14,15 +14,16 @@ interface Props {
   active?: boolean;
   onOpen: () => void;
   onToggle: (enabled: boolean) => void;
+  onAskDelete: () => void;
 }
 
-export function SkillCard({ skill, stats, active, onOpen, onToggle }: Props) {
+export function SkillCard({ skill, stats, active, onOpen, onToggle, onAskDelete }: Props) {
   const t = useTranslations("skills");
   const color = SKILL_TYPE_COLOR[skill.type];
   const SourceIcon = Icon[SKILL_SOURCE_ICON[skill.source]];
   return (
     <Card pad={false} style={{ ...s.card, ...(active ? s.active : null) }}>
-      <button type="button" style={s.open} onClick={onOpen} aria-current={active ? "true" : undefined}>
+      <button type="button" style={s.open} onClick={onOpen} aria-label={skill.name} aria-current={active ? "true" : undefined}>
         <span style={s.top}>
           <span style={s.tile(color, tintOf(color))}>
             <Icon.Sparkles size={13} />
@@ -40,6 +41,9 @@ export function SkillCard({ skill, stats, active, onOpen, onToggle }: Props) {
             <SourceIcon size={12} />
             {t(`listItem.source.${skill.source}`)}
           </span>
+          <span className="mono" style={s.version}>
+            {t("card.version", { version: skill.version })}
+          </span>
         </span>
         {stats !== undefined && (
           <span style={s.footer}>
@@ -51,8 +55,11 @@ export function SkillCard({ skill, stats, active, onOpen, onToggle }: Props) {
           </span>
         )}
       </button>
-      <span style={s.toggle} role="group" aria-label={t("card.enabledLabel", { name: skill.name })}>
-        <Toggle on={skill.enabled} onChange={onToggle} />
+      <span style={s.actions}>
+        <span role="group" aria-label={t("card.enabledLabel", { name: skill.name })}>
+          <Toggle on={skill.enabled} onChange={onToggle} />
+        </span>
+        <IconBtn icon="Trash" danger label={t("card.deleteLabel", { name: skill.name })} onClick={onAskDelete} />
       </span>
     </Card>
   );

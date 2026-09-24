@@ -17,9 +17,7 @@ export const s = {
     border: "1px solid var(--border)", background: "var(--bg-elevated)",
   } satisfies CSSProperties,
   rowOver: { border: "1px solid var(--accent)" } satisfies CSSProperties,
-  handle: { cursor: "grab", color: "var(--text-muted)", userSelect: "none", fontSize: 16, lineHeight: 1 } satisfies CSSProperties,
+  handle: { cursor: "grab", color: "var(--text-muted)", userSelect: "none", fontSize: 16, lineHeight: 1, width: 16, textAlign: "center" } satisfies CSSProperties,
+  handleMuted: { width: 16, flexShrink: 0 } satisfies CSSProperties,
   name: { flex: 1, minWidth: 0, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
-  pickerRow: { display: "flex", alignItems: "center", gap: 12, padding: "6px 8px" } satisfies CSSProperties,
-  picker: { marginTop: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 8 } satisfies CSSProperties,
-  muted: { fontSize: 13, color: "var(--text-muted)", padding: 8 } satisfies CSSProperties,
 } as const;

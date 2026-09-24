@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, Icon, Toggle } from "@devdigest/ui";
 import { SKILL_TYPES, estimateTokens } from "@/lib/skills";
 import type { Skill, SkillType } from "@devdigest/shared";
-import { getErrorMessage, useDeleteSkill, useUpdateSkill } from "@/lib/hooks/skills";
+import { getErrorMessage, useUpdateSkill } from "@/lib/hooks/skills";
 import {
   SKILL_FIELD_MAX,
   changedFields,
@@ -21,14 +21,13 @@ import { s } from "./styles";
 
 interface Props {
   skill: Skill;
-  onDeleted: (id: string) => void;
+  onAskDelete: () => void;
 }
 
-export function SkillConfigTab({ skill, onDeleted }: Props) {
+export function SkillConfigTab({ skill, onAskDelete }: Props) {
   const t = useTranslations("skills");
   const toast = useToast();
   const update = useUpdateSkill();
-  const del = useDeleteSkill();
   const uid = React.useId();
   const [baseline, setBaseline] = React.useState<SkillFormValues>(() => valuesFromSkill(skill));
   const [values, setValues] = React.useState<SkillFormValues>(baseline);
@@ -67,17 +66,6 @@ export function SkillConfigTab({ skill, onDeleted }: Props) {
       { id: skill.id, patch: { enabled } },
       { onError: (err) => toast.error(getErrorMessage(err, t("page.updateFailed"))) },
     );
-
-  const remove = () => {
-    if (!window.confirm(t("preview.deleteConfirm", { name: skill.name }))) return;
-    del.mutate(skill.id, {
-      onSuccess: () => {
-        toast.success(t("page.deleted"));
-        onDeleted(skill.id);
-      },
-      onError: (err) => toast.error(getErrorMessage(err, t("preview.deleteFailed"))),
-    });
-  };
 
   const counter = (f: keyof typeof SKILL_FIELD_MAX) => (
     <span style={values[f].length > SKILL_FIELD_MAX[f] ? s.counterOver : s.counter}>
@@ -231,7 +219,7 @@ export function SkillConfigTab({ skill, onDeleted }: Props) {
           {t("config.discard")}
         </Button>
         <span style={s.spacer} />
-        <Button kind="secondary" icon="Trash" onClick={remove} loading={del.isPending}>
+        <Button kind="secondary" icon="Trash" onClick={onAskDelete}>
           {t("preview.delete")}
         </Button>
       </div>
