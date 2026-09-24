@@ -13,6 +13,7 @@ import {
   MAX_PROPOSED,
   MAX_TOTAL_CHARS,
   SAMPLE_FILE_COUNT,
+  TEST_SAMPLE_FILE_COUNT,
 } from './constants.js';
 import { groundAll } from './grounding.js';
 import { buildSkillDraft, toConventionDto } from './helpers.js';
@@ -56,9 +57,11 @@ export class ConventionsService {
       }
     };
 
-    // 1. Sample: CONFIG list + ranked source files, deduped, in that order.
+    // 1. Sample: CONFIG + ranked source + ranked tests (tests are a separate
+    // call: getConventionSamples still goes through isJunkPath).
     const ranked = await this.container.repoIntel.getConventionSamples(repoId, SAMPLE_FILE_COUNT);
-    const paths = [...new Set([...CONFIG_FILES, ...ranked])];
+    const tests = await this.container.repoIntel.getConventionTestSamples(repoId, TEST_SAMPLE_FILE_COUNT);
+    const paths = [...new Set([...CONFIG_FILES, ...ranked, ...tests])];
     const blocks: string[] = [];
     const sampled = new Set<string>();
     let total = 0;

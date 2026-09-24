@@ -14,7 +14,12 @@ const d = hasDocker ? describe : describe.skip;
 const config = () => loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
 
 const SRC = ['export function fooBar() {', '  throw new AppError("bad", 400);', '}'].join('\n');
-const FILES = { 'src/a.ts': SRC, 'package.json': '{ "name": "demo", "type": "module" }' };
+const TEST = ['it("uses renderWithProviders", () => {', '  renderWithProviders(<X />);', '});'].join('\n');
+const FILES = {
+  'src/a.ts': SRC,
+  'src/a.test.ts': TEST,
+  'package.json': '{ "name": "demo", "type": "module" }',
+};
 
 const proposal = (over: Record<string, unknown>) => ({
   rule: 'r', evidence_path: 'src/a.ts', evidence_snippet: 'throw new AppError("bad", 400);',
@@ -42,6 +47,13 @@ d('conventions module (Testcontainers pg)', () => {
             proposal({ rule: 'Throw AppError', evidence_line: 40 }), // wrong line → corrected
             proposal({ rule: 'Invented', evidence_snippet: 'this code does not exist anywhere' }), // dropped
             proposal({ rule: 'Unsampled', evidence_path: 'src/nope.ts' }), // dropped
+            proposal({
+              rule: 'Wrap renders in renderWithProviders',
+              evidence_path: 'src/a.test.ts',
+              evidence_snippet: 'renderWithProviders(<X />);',
+              evidence_line: 2,
+              category: 'testing',
+            }),
           ],
         },
       },
@@ -52,7 +64,10 @@ d('conventions module (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ files: FILES }),
-        repoIntel: { getConventionSamples: async () => ['src/a.ts'] } as unknown as RepoIntel,
+        repoIntel: {
+          getConventionSamples: async () => ['src/a.ts'],
+          getConventionTestSamples: async () => ['src/a.test.ts'],
+        } as unknown as RepoIntel,
         llm: { openai: llm, anthropic: llm, openrouter: llm },
       },
     });
@@ -66,13 +81,15 @@ d('conventions module (Testcontainers pg)', () => {
     const res = await app.inject({ method: 'POST', url: `/repos/${repoId}/conventions/extract` });
     expect(res.statusCode).toBe(200);
     const body = res.json() as ConventionExtractResult;
-    expect(body.proposed).toBe(3);
+    expect(body.proposed).toBe(4);
     expect(body.dropped_ungrounded).toBe(2);
-    expect(body.candidates).toHaveLength(1);
-    const c = body.candidates[0]!;
-    expect(c.evidence_line).toBe(2);
-    expect(c.category).toBe('errors');
-    expect(SRC.includes(c.evidence_snippet)).toBe(true);
+    expect(body.candidates).toHaveLength(2);
+    const errors = body.candidates.find((c) => c.category === 'errors')!;
+    expect(errors.evidence_line).toBe(2);
+    expect(SRC.includes(errors.evidence_snippet)).toBe(true);
+    const testing = body.candidates.find((c) => c.category === 'testing')!;
+    expect(testing.evidence_path).toBe('src/a.test.ts');
+    expect(TEST.includes(testing.evidence_snippet)).toBe(true);
   });
 
   it('a re-scan replaces pending rows but never touches an accepted one', async () => {
@@ -82,7 +99,7 @@ d('conventions module (Testcontainers pg)', () => {
 
     await app.inject({ method: 'POST', url: `/repos/${repoId}/conventions/extract` });
     const all = (await app.inject({ method: 'GET', url: `/repos/${repoId}/conventions` })).json() as ConventionCandidate[];
-    expect(all).toHaveLength(2);
+    expect(all).toHaveLength(3);
     expect(all.filter((c) => c.accepted).map((c) => c.id)).toEqual([row!.id]);
   });
 

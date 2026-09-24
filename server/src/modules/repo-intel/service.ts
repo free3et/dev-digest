@@ -54,6 +54,7 @@ import {
 } from './constants.js';
 import { runFullIndex, type IndexPayload } from './pipeline/full.js';
 import { runIncremental } from './pipeline/incremental.js';
+import { isConventionTestPath, isJunkPath } from './helpers.js';
 
 /**
  * GLOBALS allowlist — common JS/TS builtins + runtime that appear as bare
@@ -626,9 +627,17 @@ export class RepoIntelService implements RepoIntel {
     return out;
   }
 
-  /** Top-N files by rank, minus tests/configs/migrations — conventions sample. */
+  /** Top-N files by rank, minus tests/configs/migrations — conventions source sample. */
   async getConventionSamples(repoId: string, n: number): Promise<string[]> {
     return this.getTopFilesByRank(repoId, n);
+  }
+
+  /**
+   * Top-N *test* files by rank. Used only by conventions extract so testing
+   * house rules can have evidence. Does not change `isJunkPath`.
+   */
+  async getConventionTestSamples(repoId: string, n: number): Promise<string[]> {
+    return this.pickRankedPaths(repoId, n, (path) => isConventionTestPath(path));
   }
 
   /**
@@ -641,14 +650,25 @@ export class RepoIntelService implements RepoIntel {
     n: number,
     opts?: { exclude?: string[] },
   ): Promise<string[]> {
+    const exclude = opts?.exclude ?? [];
+    return this.pickRankedPaths(repoId, n, (path) => {
+      if (isJunkPath(path)) return false;
+      if (exclude.some((e) => path.includes(e))) return false;
+      return true;
+    });
+  }
+
+  private async pickRankedPaths(
+    repoId: string,
+    n: number,
+    keep: (path: string) => boolean,
+  ): Promise<string[]> {
     if (!this.container.config.repoIntelEnabled) return [];
     if (n <= 0) return [];
-    const exclude = opts?.exclude ?? [];
     const rows = await this.repo.getRankedPaths(repoId, Math.max(n * 10, 100));
     const out: string[] = [];
     for (const r of rows) {
-      if (isJunkPath(r.path)) continue;
-      if (exclude.some((e) => r.path.includes(e))) continue;
+      if (!keep(r.path)) continue;
       out.push(r.path);
       if (out.length >= n) break;
     }
@@ -704,33 +724,6 @@ export class RepoIntelService implements RepoIntel {
 
 /** How many top-ranked files seed `getCriticalPaths` dependency chains. */
 const CRITICAL_PATH_ROOTS = 5;
-
-/**
- * Path kinds excluded from rank-driven file samples (conventions/onboarding):
- * tests, configs, declaration files, migrations, generated dirs. Substring
- * match on the repo-relative path (kept deliberately simple + deterministic).
- */
-const JUNK_PATH_PATTERNS = [
-  '.test.',
-  '.spec.',
-  '.d.ts',
-  '__tests__/',
-  '__mocks__/',
-  '/test/',
-  '/tests/',
-  '/migrations/',
-  '/__fixtures__/',
-  '.config.',
-  'vitest.',
-  'jest.',
-  'eslint',
-  'prettier',
-] as const;
-
-function isJunkPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return JUNK_PATH_PATTERNS.some((p) => lower.includes(p));
-}
 
 /** Enclosing top-level (bare-name) symbol for a line, from persistent rows. */
 function enclosingFromRows(rows: FullSymbolRow[], line: number): string | null {

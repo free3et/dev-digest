@@ -2,6 +2,12 @@
 export const SAMPLE_FILE_COUNT = 12;
 
 /**
+ * Ranked *test* files on top of the source sample (`getConventionTestSamples`).
+ * Small on purpose: enough for `category: testing`, not a second prompt.
+ */
+export const TEST_SAMPLE_FILE_COUNT = 4;
+
+/**
  * Well-known config files, read from the clone by path when they exist. They are
  * NOT ranked or junk-filtered — they are exactly where house rules are written down.
  */
@@ -41,4 +47,4 @@ export const EXTRACTION_SCHEMA_NAME = 'ConventionExtraction';
 
 export const CONVENTIONS_SKILL_NAME = 'repo-conventions';
 export const CONVENTIONS_SKILL_DESCRIPTION =
-  'Use when reviewing code in this repository: enforce the house conventions (naming, structure, errors, imports, typing, API) listed in the body.';
+  'Use when reviewing code in this repository: enforce the house conventions (naming, structure, errors, testing, imports, typing, API) listed in the body.';
