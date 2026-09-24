@@ -31,10 +31,9 @@ to a skill an agent can carry.
 
 **Out**
 
-- Test files in the sample. Testing conventions are structurally invisible today
-  (`INSIGHTS.md` Open Questions); fixing that is a product idea for **after the UI
-  exists**, not this spec.
 - Changing `isJunkPath` — it is shared with onboarding and review-context.
+  Test files enter the extract sample through a **separate**
+  `getConventionTestSamples` call, not by widening the junk filter.
 - A three-state `status`, dropping or renaming any column, changing `accepted`.
 - More than one skill per repo, scheduled or incremental scans.
 
@@ -51,6 +50,7 @@ to a skill an agent can carry.
 | D7 | Exactly **one** skill, `repo-conventions`, created once and then updated | one name to look up; no per-scan skill sprawl |
 | D8 | The agent link uses **`{skill_id}` only** | see *Agent link* |
 | D9 | The model comes from `FEATURE_MODELS.conventions` via `resolveFeatureModel` / `getFeatureModelOverride` | picking a cheap model is a Settings choice, not a constant |
+| D10 | Test files are sampled by **`getConventionTestSamples`**, not by changing `isJunkPath` | `category: testing` can have evidence; onboarding still drops tests |
 
 ### Known limitation
 
@@ -64,7 +64,9 @@ row is never touched by a scan.
 The sample the model sees is:
 
 ```
-sample = CONFIG list  +  repoIntel.getConventionSamples(repoId, 12)
+sample = CONFIG list
+       + repoIntel.getConventionSamples(repoId, 12)
+       + repoIntel.getConventionTestSamples(repoId, 4)
 ```
 
 - **CONFIG list** — a fixed, separate list of well-known config files (`eslint.config.*`,
@@ -74,6 +76,9 @@ sample = CONFIG list  +  repoIntel.getConventionSamples(repoId, 12)
 - **`getConventionSamples(repoId, 12)`** — unchanged. It returns paths only; the
   conventions service reads their contents. It drops tests, configs, declaration files
   and migrations through `isJunkPath`, which this spec does not touch.
+- **`getConventionTestSamples(repoId, 4)`** — ranked files that look like tests
+  (`.test.` / `.spec.` / `__tests__/` / `/test/` / `/tests/`), still excluding
+  configs, declarations and migrations. Same rank table, different keep-predicate.
 - Each file is rendered to the model with a **1-based line-number gutter** so the model
   can cite a line and code can check it.
 - Missing config files are skipped silently. Size caps per file and in total keep the
@@ -215,7 +220,7 @@ https://github.com/{repos.full_name}/blob/{repos.default_branch}/{evidence_path}
 - Linking to an agent leaves that agent's other skills intact.
 - Each card links to `github.com/{full_name}/blob/{default_branch}/{path}#L{n}`.
 - `isJunkPath` and `getConventionSamples` are unchanged; the sample includes the CONFIG
-  list.
+  list **and** up to 4 ranked test files from `getConventionTestSamples`.
 - `pnpm db:generate` afterwards reports no schema changes; exactly one new migration.
 
 ## Open questions
@@ -229,4 +234,5 @@ https://github.com/{repos.full_name}/blob/{repos.default_branch}/{evidence_path}
 2. Implementation session: shared contracts → schema edit → `pnpm db:generate` (once,
    after approval) → module + grounding on `MockLLMProvider.structuredBySchema` tests.
 3. Client: page, cards, modal, hooks, i18n.
-4. Tests for testing-convention sampling — only after the UI exists.
+4. Product idea: test files in the extract sample via `getConventionTestSamples`
+   (`isJunkPath` untouched).

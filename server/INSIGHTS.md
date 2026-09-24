@@ -8,6 +8,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Works
 
+- **2026-09-20** — Testing conventions need a *second* ranked sample, not a
+  looser `isJunkPath`: that filter is shared with onboarding, so dropping
+  `.test.`/`.spec.` there is still correct. Extract now calls
+  `getConventionTestSamples(repoId, 4)` (test-looking paths minus configs /
+  migrations) on top of CONFIG + `getConventionSamples(12)`. Evidence:
+  `src/modules/repo-intel/helpers.ts` (`isConventionTestPath`),
+  `src/modules/conventions/service.ts` (sample concat).
+
 - **2026-08-05** — Field ORDER in a `completeStructured` zod schema is generation order, and moving the classification/score fields to LAST is what makes them informative: with `category` and `confidence` declared before `rule`, a live conventions scan of `angular-osf` labelled all 12 candidates `imports` and scored every one exactly 0.90; with them after `rule` + evidence (plus an `occurrences` count the model must fill in first), the same model on the same repo returned 5 distinct categories and confidences spanning 0.50-0.95. Evidence: `src/modules/conventions/prompt.ts` (`ExtractionSchema` field order + the note on it).
 
 ## What Doesn't Work

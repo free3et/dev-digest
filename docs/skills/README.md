@@ -9,7 +9,14 @@ Skills are markdown rubrics attached to a review agent (`Skills` page → agent 
 | File | What it shows |
 | --- | --- |
 | `test-flakiness-checklist.zip` | A skill archive containing `SKILL.md` **and** `scripts/run.sh` + a binary asset. The preview stores nothing; the script and asset are listed as *ignored* and are never read or run. Link it to **Test Quality Reviewer**. |
-| `api-deprecation-policy.md` | A plain markdown skill with frontmatter (`name`, `description`, `type`). Link it to **API Contract Reviewer**. |
+| `breaking-change.md` | Rubric: detects a breaking change to a route, request/response shape, status code or error envelope. |
+| `response-schema.md` | Convention: every route declares `schema.response`, matched exactly to what the handler sends. |
+| `semver-discipline.md` | Convention: a behavior-changing edit to an agent's config or a skill's body bumps its version instead of silently drifting. |
+| `deprecation-policy.md` | Convention: a removed/replaced route or field follows a deprecation period instead of breaking callers. |
+
+Each of the four `.md` files above has a plain frontmatter (`name`, `description`,
+`type`) plus a **Good/Bad** example in the body. Import and link all four to
+**API Contract Reviewer** to extend it past the two seeded below.
 
 The import screen shows the extracted core, trust warnings and ignored files. Save
 only after reading it: an imported skill is someone else's instructions inside your
@@ -22,6 +29,12 @@ agent's prompt.
 
 - Test Quality: `test-branch-coverage`, `test-mocking-discipline`
 - API Contract: `api-breaking-changes`, `contract-sync-discipline`
+
+(`api-breaking-changes` is the seeded, agent-linked twin of the importable
+`breaking-change.md` above — same rubric, kept under its original seed name so
+the integration tests in `server/test/skills.it.test.ts` that assert on exactly
+two linked skills, in order, stay stable. `contract-sync-discipline` covers the
+same ground as `response-schema.md` plus the wire-naming/contract-sync rules.)
 
 ## Control experiment
 

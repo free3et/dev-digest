@@ -15,7 +15,7 @@ third-party skill cannot be brought in safely.
   (database is the source of truth; body edits write `skill_versions`).
 - **Skills page (master–detail).** `/skills` is two panes (see *Screens* below):
   left a searchable list of skill cards, right the selected skill with tabs
-  **Config · Preview · Stats**. "Add Skill" offers *Create* / *Import*.
+  **Config · Preview · Stats · Versions**. "Add Skill" offers *Create* / *Import*.
 - **Editor (Config tab).** Form: name, description, type, markdown body. The
   description is the skill's interface — written as a directive ("Use when… /
   Check that…") and the field caption says so.
@@ -34,11 +34,12 @@ third-party skill cannot be brought in safely.
 
 ## Screens
 
-Reference designs: three screenshots of the Skills page (Config, Preview, Stats).
+Reference designs: Skills page (Config, Preview, Stats, Versions) plus the
+skill-card delete affordance.
 
 **Skill list (left pane, all tabs).** Header "Skills" + primary **Add Skill** menu
 (Create / Import from file); search box; one card per skill: type-coloured icon,
-name (monospace), **enabled switch**, one-line description, type badge, **source
+name (monospace), **enabled switch**, **delete icon**, one-line description, type badge, **source
 label** (Manual · Extracted · Community · Imported), and a stats footer
 `N agents · P% pull · A% accept` (a dash when a value is unknown). The selected card is
 highlighted. Selection and tab live in the URL (`/skills?id=<uuid>&tab=config`).
@@ -61,6 +62,11 @@ note the prompt carries is shown first.
 with an *Open* link to that agent's Skills tab) and **Findings by category** (donut +
 legend with counts). Empty state when there are no runs in the window.
 
+**Versions tab.** Every body save is listed newest-first (`GET /skills/:id/versions`).
+The live version is marked Current (Diff only). Older rows have **Diff** (side-by-side
+against the live body) and **Restore**, which `PUT`s that snapshot's `body` so
+`update()` writes version N+1. Delete uses the in-app modal, not `window.confirm`.
+
 ## Stats definitions (server, last 30 days by `agent_runs.ran_at`)
 
 Only runs with status `done` of agents that have the skill linked count.
@@ -78,9 +84,9 @@ history under its new name.
 
 ## Scope — out
 
-- **Evals** tab, the **Run on evals** button and the **Versions** tab of the mockup.
+- **Evals** tab and the **Run on evals** button of the mockup.
 - URL / community-catalog import (UI keeps the existing placeholders).
-- Skill-owned eval cases, skill marketplace, restore-version UI.
+- Skill-owned eval cases, skill marketplace.
 
 ## Contract changes (`@devdigest/shared` first)
 
@@ -88,6 +94,7 @@ history under its new name.
 - `SkillInput`, `SkillUpdate`, `SkillImportRequest`, `SkillImportPreview` (new).
 - `AgentSkillLink` += `enabled`.
 - `SkillStatsSummary` (list footer) and `SkillStats` (Stats tab) — new.
+- `SkillVersion` (`version`, `body`, `created_at`) for the Versions tab.
 
 ## API
 
@@ -101,6 +108,7 @@ history under its new name.
 | POST | `/skills/import/preview` | parse `{filename, content_base64}` → preview, **stores nothing** |
 | GET | `/skills/stats` | `SkillStatsSummary[]` for every skill (list card footers) |
 | GET | `/skills/:id/stats` | `SkillStats` for the Stats tab |
+| GET | `/skills/:id/versions` | `SkillVersion[]` newest first |
 | PUT | `/agents/:id/skills/:skillId` | `{enabled?, order?}` per-agent link switch/order |
 | DELETE | `/agents/:id/skills/:skillId` | unlink |
 
