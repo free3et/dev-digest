@@ -161,6 +161,11 @@ export interface RepoIntel {
   getUnresolvedReferences(repoId: string, files: string[]): Promise<RefRow[]>;
   /** Top-N file paths by rank, filtered of tests/configs. */
   getConventionSamples(repoId: string, n: number): Promise<string[]>;
+  /**
+   * Top-N ranked *test* files. Conventions extract only — `isJunkPath` is
+   * unchanged and still drops these from `getConventionSamples`.
+   */
+  getConventionTestSamples(repoId: string, n: number): Promise<string[]>;
 
   // --- T3: onboarding reading-path + critical paths (graph required) ------
   getTopFilesByRank(

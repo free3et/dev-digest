@@ -29,8 +29,51 @@ them here.
 
 ## Decisions
 
-_None yet. Add the first one the next time a UI approach is tried and
-abandoned — that is exactly what this file is for._
+### 2026-09-20 — Restore a skill version by PUTting its body
+
+**What:** the Versions tab Restore sends `PUT /skills/:id` with `{ body }`
+of the chosen snapshot; `SkillsService.update()` already writes
+`skill_versions` and bumps `version`.
+**Why:** every body edit already snapshots; a dedicated restore route
+would duplicate that write path.
+**Rejected:** `POST /skills/:id/versions/:n/restore`.
+`client/src/app/skills/_components/SkillDetail/_components/SkillVersionsTab/SkillVersionsTab.tsx`
+
+### 2026-09-20 — Deselect all unaccepts; Reject still deletes
+
+**What:** the conventions toolbar "Deselect all" sends `PATCH accepted:
+false` per accepted row; card Reject stays `DELETE`.
+**Why:** the homework mock has both controls, and D5/D6 still hold —
+rejected rules must leave no trace, while deselect only drops them from
+the skill draft.
+**Rejected:** mapping Deselect all to DELETE (that would wipe accepted
+rules the user only wanted un-ticked) and mapping Reject to PATCH-false
+(the spec already found that a no-op against a boolean `accepted`).
+`client/src/app/repos/[repoId]/conventions/_components/ConventionsView/ConventionsView.tsx`
+
+### 2026-09-22 — Create-skill modal defaults to `repo-conventions`
+
+**What:** the conventions Create skill modal seeds Name with
+`CONVENTIONS_SKILL_NAME` (`repo-conventions`). Lookup still matches a
+legacy `{repo}-conventions` skill via `skillNameForRepo` so D7 does not
+spawn a duplicate.
+**Why:** grading criterion 42 requires the fixed name; the earlier mock
+preference for `{repo}-conventions` lost.
+**Rejected:** keeping `skillNameForRepo` as the modal default (fails the
+rubric) while only documenting a manual rename.
+`client/src/app/repos/[repoId]/conventions/_components/ConventionsView/ConventionsView.tsx`
+
+### 2026-09-20 — Skill name follows `{repo}-conventions`, still finds `repo-conventions`
+
+**What:** ~~modal defaulted to `skillNameForRepo`~~ — superseded 2026-09-22
+(default is now `repo-conventions`; helper kept for legacy lookup only).
+**Why:** the mock shows `{repo}-conventions`; the spec's single-skill
+rule (D7) must not spawn a second skill if one already exists under the
+old name.
+**Rejected:** hard-coding `repo-conventions` in the modal (fails the
+mock) and creating a new skill whenever the preferred name is unused
+(would duplicate on the next save).
+`client/src/app/repos/[repoId]/conventions/_components/ConventionsView/helpers.ts`
 
 ## What Works
 
@@ -49,6 +92,14 @@ _None yet._
   needs writing — it may already exist, just disconnected.
 
 ## Codebase Patterns
+
+- **2026-09-20** — Vendor `NAV` ships Agents under WORKSPACE. Move it into
+  SKILLS LAB by splicing that same item object in
+  `client/src/components/app-shell/nav.ts` — do not edit `vendor/ui/nav.ts`.
+  Insert after Skills *before* Conventions is pushed so the lab order is
+  Skills, Agents, Conventions. Re-running the register is a no-op: Agents
+  is already gone from WORKSPACE.
+  `client/src/components/app-shell/nav.ts`
 
 - **2026-09-18** — To let a parent drive a child's internal filter state
   without a rewrite, add optional `<value>`/`on<Value>Change` props and branch
@@ -73,6 +124,8 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-09-19** — Importing a VALUE (not a type) from `@devdigest/shared` in client code breaks `next build` with `Module not found: Can't resolve './contracts/knowledge.js'`: the vendored package is NodeNext-style TS (`from "./x.js"` meaning `x.ts`), which vitest and `tsc` resolve but webpack does not. Until now every client import from it was `import type`, erased before bundling. `next.config.mjs` now maps `.js` → `.ts` via `resolve.extensionAlias`; `pnpm build` (not typecheck/test) is the check that catches this. Building also rewrites `.next`, so restart a running `next dev` afterwards. Evidence: `client/next.config.mjs`, `src/app/skills/_components/SkillsView/_components/SkillEditorDrawer/helpers.ts` (imports the `SkillInput` zod schema).
+
 - **2026-08-04** — This dev environment's seeded Postgres has zero
   `agent_runs` rows with `findings_count > 0` across all 3 seeded repos
   (`acme/payments-api`, `myasoid/dev-digest`, `quarkusio/quarkus`) — every
@@ -87,6 +140,8 @@ _None yet._
   playwright install chromium` (no `--with-deps`, which needs sudo) downloads
   a working headless Chromium fine, so a scratch `npm install playwright` +
   a small driver script is the fallback for one-off browser verification here.
+
+- **2026-09-19** — `@devdigest/ui` `Textarea`, `SelectInput` and `Toggle` accept no `id`/`aria-label`, and `FormField`'s `<label>` has no `htmlFor`, so `getByLabelText` cannot reach them. The skill Config tab therefore uses native `<input>/<textarea>/<select>` with `useId()` + `<label htmlFor>`, and wraps each `Toggle` in `<span role="group" aria-label>`. For master–detail state in the URL, tests mock `next/navigation` with a `useSyncExternalStore`-backed `useSearchParams` so `router.replace` really re-renders. Evidence: `src/app/skills/_components/SkillDetail/_components/SkillConfigTab/`, `SkillsView.test.tsx`.
 
 ## Recurring Errors & Fixes
 

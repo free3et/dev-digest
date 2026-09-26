@@ -5,9 +5,11 @@
     "headingPrefix": "Conventions in ",
     "repoFallback": "repo",
     "subtitle": "Scan the cloned repo to surface house-rules — each backed by evidence you can turn into a Skill.",
+    "detected": "Detected from {count, plural, one {# candidate} other {# candidates}}",
+    "lastScanNow": "last scan just now",
     "scanning": "Scanning…",
-    "rescan": "Re-scan",
-    "runExtraction": "Run extraction",
+    "rescan": "ReScan",
+    "runExtraction": "Run Scan",
     "extractionFailed": "Extraction failed",
     "loadError": "Could not load conventions.",
     "empty": {
@@ -15,12 +17,58 @@
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
       "cta": "Run extraction"
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "createSkill": "Create skill",
+    "acceptedOf": "{accepted} of {total} accepted",
+    "deselectAll": "Deselect all",
+    "selectAll": "Select all"
   },
   "card": {
     "confidence": "Confidence",
     "accepted": "Accepted",
-    "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "accept": "Accept",
+    "reject": "Reject",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "rule": "Rule",
+    "category": "Category",
+    "copyPath": "Copy path"
+  },
+  "modal": {
+    "title": "Create skill from conventions",
+    "banner": "Merged from {count, plural, one {# accepted convention} other {# accepted conventions}} in {repo}. Everything below is editable before you save.",
+    "agent": "Link to agent",
+    "agentNone": "Don’t link yet",
+    "create": "Create skill",
+    "cancel": "Cancel",
+    "noAccepted": "Accept at least one convention before creating a skill.",
+    "saved": "Skill saved",
+    "linked": "Skill saved and linked to the agent",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "types": {
+      "rubric": "rubric",
+      "convention": "convention",
+      "security": "security",
+      "custom": "custom"
+    },
+    "enabled": "Enabled",
+    "enabledHint": "Whether this block is added to agents’ prompts.",
+    "body": "Skill body",
+    "unsaved": "unsaved",
+    "tokens": "{count, plural, one {# token} other {# tokens}}",
+    "footerNew": "Will be added to Skills Lab",
+    "footerExisting": "Saved as v{version} · added to Skills Lab"
+  },
+  "category": {
+    "naming": "Naming",
+    "structure": "Structure",
+    "errors": "Errors",
+    "testing": "Testing",
+    "imports": "Imports",
+    "typing": "Typing",
+    "api": "API",
+    "general": "General"
   }
 }

@@ -115,7 +115,13 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+export const SkillSource = z.enum([
+  'manual',
+  'imported_url',
+  'imported_file',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -131,6 +137,96 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+/** One immutable body snapshot (`skill_versions`). Newest first on the list. */
+export const SkillVersion = z.object({
+  version: z.number().int().positive(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+// Write-side shapes for the skills module. The description is the skill's
+// interface (when to use it) — kept directive and short so an agent can decide.
+export const SKILL_NAME_MAX = 80;
+export const SKILL_DESCRIPTION_MAX = 500;
+export const SKILL_BODY_MAX = 20_000;
+
+export const SkillInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SKILL_NAME_MAX)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9 _.-]*$/, 'Use letters, digits, space, dot, dash or underscore'),
+  description: z.string().trim().min(1).max(SKILL_DESCRIPTION_MAX),
+  type: SkillType,
+  body: z.string().trim().min(1).max(SKILL_BODY_MAX),
+  source: SkillSource.default('manual'),
+  enabled: z.boolean().optional(),
+});
+export type SkillInput = z.infer<typeof SkillInput>;
+
+export const SkillUpdate = SkillInput.omit({ source: true }).partial();
+export type SkillUpdate = z.infer<typeof SkillUpdate>;
+
+/** Import upload: a .md file or a .zip archive, base64-encoded (JSON transport). */
+export const SkillImportRequest = z.object({
+  filename: z.string().min(1).max(255),
+  content_base64: z.string().min(1),
+});
+export type SkillImportRequest = z.infer<typeof SkillImportRequest>;
+
+/** What the server extracted — NOT stored until the user confirms via POST /skills. */
+export const SkillImportPreview = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  source_file: z.string(),
+  /** Archive entries that were skipped and never read (scripts, binaries, …). */
+  ignored_entries: z.array(z.string()),
+  /** Trust warnings, e.g. instruction-override phrasing or external URLs. */
+  warnings: z.array(z.string()),
+  /** True when the body was cut to SKILL_BODY_MAX. */
+  truncated: z.boolean(),
+});
+export type SkillImportPreview = z.infer<typeof SkillImportPreview>;
+
+/** Skills page: per-skill usage over a rolling window (see specs/02-skills-for-review-agents.md). */
+export const SKILL_STATS_WINDOW_DAYS = 30;
+
+/** List-card footer. Rates are fractions 0..1; null when there is nothing to divide by. */
+export const SkillStatsSummary = z.object({
+  skill_id: z.string(),
+  /** Agents with an agent_skills link to the skill (enabled or not). */
+  agents_count: z.number().int(),
+  /** Runs whose prompt included the skill / all done runs of the linked agents. */
+  pull_rate: z.number().min(0).max(1).nullable(),
+  /** accepted / (accepted + dismissed) over findings of the pulled runs. */
+  accept_rate: z.number().min(0).max(1).nullable(),
+});
+export type SkillStatsSummary = z.infer<typeof SkillStatsSummary>;
+
+/** Stats tab. */
+export const SkillStats = SkillStatsSummary.extend({
+  window_days: z.number().int(),
+  runs_total: z.number().int(),
+  runs_pulled: z.number().int(),
+  findings_total: z.number().int(),
+  findings_accepted: z.number().int(),
+  findings_dismissed: z.number().int(),
+  agents: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      /** The per-agent link switch (agent_skills.enabled). */
+      enabled: z.boolean(),
+    }),
+  ),
+  by_category: z.array(z.object({ category: z.string(), count: z.number().int() })),
+});
+export type SkillStats = z.infer<typeof SkillStats>;
+
 export const CommunitySkill = z.object({
   name: z.string(),
   repo: z.string(),
@@ -141,15 +237,58 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'errors',
+  'testing',
+  'imports',
+  'typing',
+  'api',
+  'general',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
 export const ConventionCandidate = z.object({
   id: z.string(),
   rule: z.string(),
   evidence_path: z.string(),
   evidence_snippet: z.string(),
+  /** 1-based line of the evidence as verified by code (never the model's claim). */
+  evidence_line: z.number().int().positive().nullable(),
+  category: ConventionCategory,
   confidence: z.number().min(0).max(1),
   accepted: z.boolean(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/** Scan result: `dropped_ungrounded` counts proposals the grounding gate rejected. */
+export const ConventionExtractResult = z.object({
+  candidates: z.array(ConventionCandidate),
+  proposed: z.number().int(),
+  dropped_ungrounded: z.number().int(),
+});
+export type ConventionExtractResult = z.infer<typeof ConventionExtractResult>;
+
+/** PATCH /conventions/:id — accept and/or edit. */
+export const ConventionUpdate = z
+  .object({
+    accepted: z.boolean(),
+    rule: z.string().trim().min(1),
+    category: ConventionCategory,
+  })
+  .partial();
+export type ConventionUpdate = z.infer<typeof ConventionUpdate>;
+
+/** The un-persisted `repo-conventions` skill built from accepted rows only. */
+export const ConventionSkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  body: z.string(),
+  evidence_files: z.array(z.string()),
+  convention_ids: z.array(z.string()),
+});
+export type ConventionSkillDraft = z.infer<typeof ConventionSkillDraft>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
@@ -195,6 +334,8 @@ export const AgentSkillLink = z.object({
   agent_id: z.string(),
   skill_id: z.string(),
   order: z.number().int(),
+  /** Per-agent switch: a linked skill reaches the prompt only when this is true. */
+  enabled: z.boolean(),
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;
 

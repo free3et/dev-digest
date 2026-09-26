@@ -4,7 +4,7 @@
  * em dash — never "$0.00" for a run that simply has no cost recorded.
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../../../messages/en/runs.json";
@@ -60,5 +60,24 @@ describe("TraceBody — Stats row cost tile", () => {
     renderBody(baseTrace({ cost_usd: null }));
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("TraceBody — Prompt assembly skills", () => {
+  it("renders the skills block when prompt_assembly.skills is present", () => {
+    const trace = baseTrace({ cost_usd: null });
+    trace.prompt_assembly = {
+      ...trace.prompt_assembly,
+      skills: "# Test Coverage Nudge\n\nCheck tests.",
+    };
+    renderBody(trace);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.getByText("Skills (dynamic)")).toBeInTheDocument();
+  });
+
+  it("hides the skills block when prompt_assembly.skills is omitted", () => {
+    renderBody(baseTrace({ cost_usd: null }));
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.queryByText("Skills (dynamic)")).not.toBeInTheDocument();
   });
 });
