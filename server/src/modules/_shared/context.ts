@@ -10,6 +10,9 @@ export interface RequestContext {
  * Resolve the tenancy context for a request via the AuthProvider. In MVP
  * (LocalNoAuthProvider) this always returns the default workspace + system user.
  * Every module uses this so workspace scoping is never forgotten.
+ *
+ * Callers must pass the returned `workspaceId` into every repository query that
+ * touches workspace-owned rows; ignoring it is how cross-tenant reads happen.
  */
 export async function getContext(
   container: Container,
