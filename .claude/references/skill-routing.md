@@ -1,6 +1,6 @@
 # Skill routing
 
-Single source of truth for which project skill applies to which change. Read by `planner` (to name skills per step), `implementer` (to load them per step) and the review, test and docs agents, so a plan never promises a skill the implementer will not apply. Update this file when skills are added or removed; the directory `.claude/skills/` is the truth, not `skills-lock.json` or `.claude/skills/README.md`.
+Single source of truth for which project skill applies to which change. Read by `implementation-planner` (to name skills per step), `implementer` (to load them per step) and the review, test and docs agents, so a plan never promises a skill the implementer will not apply. Update this file when skills are added or removed; the directory `.claude/skills/` is the truth, not `skills-lock.json` or `.claude/skills/README.md`.
 
 ## Routing table
 
@@ -20,7 +20,7 @@ Single source of truth for which project skill applies to which change. Read by 
 | Start and end of any non-trivial task | `engineering-insights` (read only, unless the caller says to record) |
 | Diagrams in docs | `mermaid-diagram` |
 
-`planner` and `implementer` preload the same 12 skills via `skills:`, in this order: `onion-architecture`, `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`, `zod`, `frontend-ui-architecture`, `next-best-practices`, `react-best-practices`, `react-testing-library`, `typescript-expert`, `security`, `engineering-insights`. The table above decides which of them apply to a step. `mermaid-diagram` is not preloaded by them; load it through the `Skill` tool when needed (`doc-writer` preloads it).
+`implementation-planner` and `implementer` preload the same 12 skills via `skills:`, in this order: `onion-architecture`, `fastify-best-practices`, `drizzle-orm-patterns`, `postgresql-table-design`, `zod`, `frontend-ui-architecture`, `next-best-practices`, `react-best-practices`, `react-testing-library`, `typescript-expert`, `security`, `engineering-insights`. The table above decides which of them apply to a step. `mermaid-diagram` is not preloaded by them; load it through the `Skill` tool when needed (`doc-writer` preloads it).
 
 **Skills per agent.** The four newer agents keep narrow lists (preloading puts full skill content into context):
 
@@ -33,7 +33,7 @@ Single source of truth for which project skill applies to which change. Read by 
 
 Changing one of these lists means changing this table in the same edit.
 
-**Sync rule.** `planner` and `implementer` must use the same skills for frontend and backend alike. The `skills:` lists in `.claude/agents/planner.md` and `.claude/agents/implementer.md` must stay identical, and any skill added to or removed from them changes this table and the list above in the same edit. Neither agent keeps a private skill list.
+**Sync rule.** `implementation-planner` and `implementer` must use the same skills for frontend and backend alike. The `skills:` lists in `.claude/agents/implementation-planner.md` and `.claude/agents/implementer.md` must stay identical, and any skill added to or removed from them changes this table and the list above in the same edit. Neither agent keeps a private skill list.
 
 ## Not routed
 

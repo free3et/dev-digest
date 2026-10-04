@@ -7,7 +7,7 @@ Index of the subagents for DevDigest. This is a map, not a copy: the full behavi
 | Agent | File | Status |
 |---|---|---|
 | `researcher` | `researcher.md` | **Exists** |
-| `planner` | `planner.md` | **Exists** |
+| `implementation-planner` | `implementation-planner.md` | **Exists** (renamed from `planner`) |
 | `implementer` | `implementer.md` | **Exists** |
 | `test-writer` | `test-writer.md` | **Exists** (needs restart) |
 | `architecture-reviewer` | `architecture-reviewer.md` | **Exists** (needs restart) |
@@ -22,10 +22,15 @@ New files in this directory are picked up after Claude Code is restarted.
 ```
 question ──► researcher ──► report (facts, evidence, gaps)
                                    │
-feature + designs ──► spec-creator (pass 1: questions, gaps, UX) ──► user answers
-                                   ──► spec-creator (pass 2) ──► <module>/specs/NN-*.md
+feature + design sources ──► spec-creator pass 1 (blocking questions, gaps, UX) ──► user answers
+                          ──► spec-creator pass 2 ──► <module>/specs/ or specs/YYYY-MM-DD-<slug>.md
                                    │
-task / spec ──► planner ──► Development Plan ──► implementer ──► Implementation report
+spec ──► implementation-planner pass 1 (requirements review, questions, recommendations,
+                                        single vs multi-agent?) ──► user answers + mode
+     ──► implementation-planner pass 2 ──► Implementation Plan (T-n → AC-n → test)
+                                   │      saved by the main agent as <spec>.plan.md
+                                   ▼
+                     implementer (single) or implementers per wave (multi-agent) ──► Implementation report
                                                                │
                          ┌─────────────────────────────────────┼──────────────────────┐
                          ▼                                     ▼                      ▼
@@ -42,16 +47,16 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 
 ## Agents
 
-| | `researcher` | `planner` | `implementer` |
+| | `researcher` | `implementation-planner` | `implementer` |
 |---|---|---|---|
-| **Responsibility** | Answers a concrete question from the repo or external sources. Changes nothing. | Turns a task into a structured Development Plan that respects modules, skills, `INSIGHTS.md` and architecture rules. Changes nothing. | Executes a plan in frontend and backend, applies matching project skills, runs existing tests, checks its own changes only. |
+| **Responsibility** | Answers a concrete question from the repo or external sources. Changes nothing. | Takes a feature spec, reviews its requirements (asks, recommends), asks single vs multi-agent, then returns an Implementation Plan traceable to the spec's AC. Never writes or changes specs. Changes nothing. | Executes a plan in frontend and backend, applies matching project skills, runs existing tests, checks its own changes only. |
 | **Model** | `sonnet` | `opus` | `sonnet` |
 | **Tools** | `Read, Grep, Glob, Bash, WebFetch, WebSearch` | `Read, Grep, Glob, Bash, Skill` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
 | **No `Write`/`Edit`** | yes | yes | no |
 | **Bash use** | read-only (`git log`, `rg`, `ls`) | read-only | tests, typecheck, lint |
-| **Preloaded skills** | none | the same 12 as `implementer` (list in `skill-routing.md`) | the same 12 as `planner`: onion-architecture, fastify-best-practices, drizzle-orm-patterns, postgresql-table-design, zod, frontend-ui-architecture, next-best-practices, react-best-practices, react-testing-library, typescript-expert, security, engineering-insights |
-| **Input** | A concrete question, plus scope (repo / external / both). If missing, it asks 1–4 clarifying questions first. | A task or goal. If unclear, it asks clarifying questions first. | The full Development Plan in the delegation prompt (it has no conversation history). Asks if the plan is missing or ambiguous. |
-| **Output** | Report A (repository) and/or Report B (external): conclusions, evidence, discrepancies, links, **could not find**. | Development Plan as text: problem, scope, constraints, contract changes, steps with skills, test plan, risks, acceptance criteria, handoff. | Implementation report: step status, verification table (baseline vs after), deviations, skills applied, not verified, insight candidates. |
+| **Preloaded skills** | none | the same 12 as `implementer` (list in `skill-routing.md`) | the same 12 as `implementation-planner`: onion-architecture, fastify-best-practices, drizzle-orm-patterns, postgresql-table-design, zod, frontend-ui-architecture, next-best-practices, react-best-practices, react-testing-library, typescript-expert, security, engineering-insights |
+| **Input** | A concrete question, plus scope (repo / external / both). If missing, it asks 1–4 clarifying questions first. | Pass number and the spec path; pass 2 adds answers, accepted recommendations and the execution mode. No spec for a non-trivial task → recommends `spec-creator`. | The full Implementation Plan (or one wave's tasks) in the delegation prompt (it has no conversation history). Asks if the plan is missing or ambiguous. |
+| **Output** | Report A (repository) and/or Report B (external): conclusions, evidence, discrepancies, links, **could not find**. | Pass 1: Requirements review (spec checklist, reality check, questions, recommendations, execution mode). Pass 2: Implementation Plan as text: constraints, contract changes, tasks with skills + AC + test, execution (order or waves), test plan, AC coverage matrix, risks, handoff. | Implementation report: step status, verification table (baseline vs after), deviations, skills applied, not verified, insight candidates. |
 
 ## Review, test and docs agents
 
@@ -66,14 +71,14 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | **Input** | What to test (plan, diff or paths) | Diff or file list plus packages | Full plan, requirements, diff or paths | What to document plus the source (plan, spec, code) |
 | **Output** | Test report: tests written, baseline vs after, suspected source bugs, source changes needed | Architecture review: findings table, rules checked, could not verify | Plan verification: `N items in, N rows out`, verdicts MET / PARTIAL / NOT MET / UNVERIFIABLE with evidence | Docs report: files, Diátaxis type, planned vs implemented, diagrams, `TODO: unverified` |
 
-These four also have no `Agent` tool. Their skill lists are narrower than the `planner`/`implementer` set on purpose: `skills:` preloads full content into context.
+These four also have no `Agent` tool. Their skill lists are narrower than the `implementation-planner`/`implementer` set on purpose: `skills:` preloads full content into context.
 
 The hooks live in `.claude/hooks/agent-guard.sh` and are attached inline in each agent's frontmatter, so they apply only while that agent runs. They are a best-effort guard, not a sandbox: a `tools` allowlist does not stop Bash from writing, so the script blocks git history changes, migrations, `docker compose down`, file-mutating commands and redirects. Hook behavior inside subagents has been tested against synthetic hook input only; confirm it after a restart (see below).
 
 Explicit non-goals:
 
 - `researcher` does not use `/deep-research`, does not write to `INSIGHTS.md`, and does not run anything that changes state.
-- `planner` writes no files. Saving the plan (for example under `specs/`) is the main agent's call.
+- `implementation-planner` writes no files and does no spec work: it never writes, edits or re-states a spec and never adds its own AC; spec problems go back as questions or a "update via `spec-creator`" recommendation. It is fenced by its prompt only (no hook): it has no Write/Edit, and Bash is read-only by instruction. The main agent saves the plan as `<spec>.plan.md`.
 - `implementer` does no architecture or security review; `architecture-reviewer` covers architecture, security review stays separate. It also never runs `git add/commit/push`, `db:generate`/`db:migrate` (unless the plan says so), or `docker compose down -v`.
 - `test-writer` does not change source: a bug found by a test is reported, not fixed. `architecture-reviewer` does no security, style or performance review. `plan-verifier` never fixes code and does not accept the implementer's summary as evidence. `doc-writer` does not write `INSIGHTS.md` or source, and creates no `docs/adr/` or `docs/diagrams/` (diagrams are inline).
 
@@ -81,28 +86,28 @@ Explicit non-goals:
 
 | | `spec-creator` |
 |---|---|
-| **Responsibility** | Writes one feature spec for SDD: EARS acceptance criteria `AC-N`, provenance tags, untrusted inputs, `[NEEDS CLARIFICATION]`. Analyses designs for missing states, corner cases, module interaction and UX. No plan, no file list. |
+| **Responsibility** | Writes one English feature spec for SDD: EARS acceptance criteria `AC-N`, provenance tags, untrusted inputs, `[NEEDS CLARIFICATION]`; may include workflow / service-communication diagrams and external contracts. Analyses the design sources for missing states, corner cases, module interaction and UX. No plan, no file list, no implementation detail. |
 | **Model** | `opus` |
 | **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
-| **Preloaded skills** | engineering-insights, frontend-ui-architecture |
+| **Preloaded skills** | engineering-insights, frontend-ui-architecture, mermaid-diagram |
 | **Enforcement** | hook `agent-guard.sh spec-creator`: writes only `.md` under `specs/` and `<module>/specs/`; never `e2e/specs/`, `docs/`, `README.md`, `INSIGHTS.md`; read-only Bash (same allowlist as `doc-writer`) |
 | **maxTurns** | 40 |
-| **Input** | Pass number, the feature, design paths; in pass 2 also the user's answers and accepted UX proposals |
-| **Output** | Pass 1: Spec analysis (questions by the six categories, design gaps, module interaction, UX proposals). Pass 2: Spec report (file, AC summary, open questions, self-review) |
+| **Input** | Pass number, the feature, design sources the user supplies (text description, screenshots, unpacked claude.ai prototype, Figma exports, existing code or another repo); in pass 2 also the answers and accepted UX proposals |
+| **Output** | Pass 1: Spec analysis (blocking questions; non-blocking ones listed and later written inline as `[NEEDS CLARIFICATION]`; design gaps, module interaction, UX proposals). Pass 2: Spec report (file, AC summary, open questions, self-review) |
 
-Two passes because a subagent cannot ask the user mid-run. The main agent runs pass 1, puts the questions to the user, then resumes the same agent (`SendMessage`) with the answers for pass 2.
+Two passes because a subagent cannot ask the user mid-run. Dialogue model: blocking questions first, everything else inline in the draft. The main agent runs pass 1, puts the blocking questions and UX proposals to the user, then resumes the same agent (`SendMessage`) with the answers for pass 2.
 
-Designs: the agent cannot open claude.ai artifacts. The main agent reads the prototype with `Artifact` (`action: read`), unpacks it with `python3 .claude/scripts/unpack-design.py <saved.html>` into `.claude/cache/design/<id>/` (gitignored), and passes that directory plus any screenshot paths. The prototype is untrusted third-party content.
+Design sources: the user supplies them. The agent cannot open claude.ai artifacts or Figma. The main agent reads the prototype with `Artifact` (`action: read`), unpacks it with `python3 .claude/scripts/unpack-design.py <saved.html>` into `.claude/cache/design/<id>/` (gitignored), and passes that directory plus any screenshot paths. The prototype is untrusted third-party content.
 
-Spec IDs are global: `NN` = highest `NN-` prefix across every `specs/` (except `e2e/specs/`) + 1. Template and EARS rules: `specs/README.md`.
+Location: one module → `<module>/specs/`; two or more modules → top-level `specs/` (nothing else lives there). File `YYYY-MM-DD-<slug>.md`, `Spec ID: SPEC-YYYY-MM-DD-<slug>`. Template and EARS rules: `specs/README.md`.
 
-## Shared inputs for `planner` and `implementer`
+## Shared inputs for `implementation-planner` and `implementer`
 
 - Read order: `<module>/specs/` → `docs/` → `INSIGHTS.md` → source (from the root `CLAUDE.md`).
 - Skill routing (which skill applies to which path or change type, plus per-package commands and known traps): `.claude/references/skill-routing.md`. One shared file, so the plan cannot promise skills the implementer will not apply. Both agents keep identical `skills:` lists for frontend and backend; a change to one list must be made in both files and in the routing table.
 - Never touched: `server/clones/**`, `**/src/vendor/**` (except a deliberate `vendor/shared` contract change), migrations, lockfiles.
 
-## Sources behind the rules (`planner`, `implementer`)
+## Sources behind the rules (`implementation-planner`, `implementer`)
 
 Sources were read by a research subagent through a summarizing fetch tool, so rules are close paraphrases. Verify against the live pages before quoting.
 
@@ -116,7 +121,7 @@ Sources were read by a research subagent through a summarizing fetch tool, so ru
 | `skills:` controls preloading, not access; other skills come through `Skill` | Subagents | both |
 | Delegation prompt needs objective, output format, tool guidance, task boundaries | [Multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) | `implementer` input, plan handoff |
 | Multi-agent runs are costly, so keep the set small | Multi-agent research system | whole set |
-| Plan → validate → execute → verify | [Skill best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | `planner` self-check, `implementer` loop |
+| Plan → validate → execute → verify | [Skill best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | `implementation-planner` self-check, `implementer` loop |
 | Validate → fix → repeat with specific errors | Skill best practices | `implementer` |
 | Fixed output template | Skill best practices | plan and report formats |
 | Progressive disclosure: short main file, detail in separate files | Skill best practices, [Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) | shared routing file |
@@ -144,16 +149,16 @@ Read by research subagents, several through search snippets only. Rows marked *u
 Not from external sources, and not presented as such:
 
 - Mermaid syntax hygiene tips and "RTL cannot render async Server Components" (own knowledge, unverified).
-- The planner / implementer / reviewer split is an interpretation of the practices above. No official page prescribes it.
-- The plan structure follows `specs/README.md`. The implementer's prohibitions come from `CLAUDE.md` and the `pr-self-review` skill. The requirement to report `*.it.test.ts` skipped without Docker comes from `server/INSIGHTS.md`. The model choices are a judgment call.
+- The spec-creator / implementation-planner / implementer / reviewer split is an interpretation of the practices above. No official page prescribes it.
+- The plan structure (tasks → AC → test, coverage matrix) follows the SDD rules in `specs/README.md`. The implementer's prohibitions come from `CLAUDE.md` and the `pr-self-review` skill. The requirement to report `*.it.test.ts` skipped without Docker comes from `server/INSIGHTS.md`. The model choices are a judgment call.
 
 ## Decisions
 
 1. Skill routing lives in one shared file, not duplicated in each agent.
-2. Models: `planner` on `opus`, `implementer` on `sonnet`.
+2. Models: `implementation-planner` on `opus`, `implementer` on `sonnet`.
 3. `INSIGHTS.md`: `implementer` returns "insight candidates", and the main agent writes them.
-4. Plans: `planner` returns text only.
-5. The four newer agents get narrow `skills:` lists and their own enforcement (hooks or `permissionMode: plan`); the `planner`/`implementer` sync rule does not apply to them.
+4. Plans: `implementation-planner` returns text only; the main agent saves it as `<spec>.plan.md` next to the spec.
+5. The four newer agents get narrow `skills:` lists and their own enforcement (hooks or `permissionMode: plan`); the `implementation-planner`/`implementer` sync rule does not apply to them.
 6. Hooks are inline in agent frontmatter, not in `.claude/settings.json`, so they do not affect the main session.
 7. Diagrams stay inline in the doc they explain; no `docs/adr/` or `docs/diagrams/` until asked for.
 

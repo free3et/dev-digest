@@ -1,10 +1,10 @@
 # client/specs
 
-One file per UI feature: `NN-feature-name.md`. If it also needs a new endpoint,
+One file per UI feature: `YYYY-MM-DD-<slug>.md` (Spec ID `SPEC-YYYY-MM-DD-<slug>`; template and rules in [`../../specs/README.md`](../../specs/README.md)). If it also needs a new endpoint,
 put the spec in the root `../../specs/` so both sides stay in one document.
 
 > **Base template:** the feature-spec shape in [`../../specs/README.md`](../../specs/README.md)
-> (SPEC-NN, EARS acceptance criteria, provenance). The prompts below are
+> (EARS acceptance criteria, provenance). The prompts below are
 > client-specific prompts: cover them inside *Inputs and provenance*, the AC and
 > *Edge cases* rather than as extra headings:
 

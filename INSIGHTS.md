@@ -77,7 +77,8 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   with synthetic input: `printf '%s' '{"tool_name":"Write","tool_input":
   {"file_path":"'$PWD'/server/src/x.ts"}}' | CLAUDE_PROJECT_DIR=$PWD
   .claude/hooks/agent-guard.sh test-writer; echo $?` prints `2`.
-  `planner` and `researcher` still rely on their prompt alone.
+  `implementation-planner` (formerly `planner`) and `researcher` still rely
+  on their prompt alone, by choice (2026-10-04).
   `.claude/hooks/agent-guard.sh`
 
 - **2026-09-25** — An agent file added to `.claude/agents/` is not callable in
@@ -91,10 +92,10 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-09-25** — Subagents can spawn subagents by default (up to three
   layers below the main conversation), so "single-level" is not automatic:
   omit `Agent` from the agent's `tools` list (or set
-  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`). `planner`, `implementer` and
+  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`). `implementation-planner`, `implementer` and
   `researcher` all rely on the omission. Source:
   https://code.claude.com/docs/en/sub-agents (read through a summarizing
-  fetch, so verify before quoting). `.claude/agents/planner.md:4`
+  fetch, so verify before quoting). `.claude/agents/implementation-planner.md:5`
 
 - **2026-07-29** — Half this repo is pnpm and half is npm, so running `pnpm install` in `reviewer-core/` or `e2e/` would create a second competing lockfile — match the lockfile already in the directory, not the root README's pnpm prerequisite.
 
@@ -135,7 +136,7 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   `.claude/agents/test-writer.md:11-17`
 
 - **2026-09-25** — Does `skills:` in agent frontmatter really preload
-  `onion-architecture` and `frontend-ui-architecture` for `planner` and
+  `onion-architecture` and `frontend-ui-architecture` for `implementation-planner` and
   `implementer`? The rule comes from the subagent docs, not from a run in
   this repo. After a restart, delegate one step from
   `docs/improvement-plan.md` and check that the report cites layering rules;
