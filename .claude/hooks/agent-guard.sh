@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse guard for project subagents. Usage: agent-guard.sh <profile>
-# Profiles: test-writer | plan-verifier | doc-writer
+# Profiles: test-writer | plan-verifier | doc-writer | spec-creator
 # Reads the hook JSON on stdin. Exit 2 blocks the tool call; stderr goes back to the agent.
 # Best-effort guard, not a sandbox: it exists because a `tools` allowlist does not stop Bash from writing.
 set -u
@@ -28,9 +28,18 @@ if [ "$tool" = "Edit" ] || [ "$tool" = "Write" ]; then
     doc-writer)
       case "$rel" in
         INSIGHTS.md|*/INSIGHTS.md|CLAUDE.md|*/CLAUDE.md) deny "doc-writer must not write '$rel'; return insight candidates instead." ;;
+        e2e/specs/*) deny "e2e/specs/ holds browser flows, not docs or specs." ;;
         docs/*|*/docs/*|specs/*|*/specs/*) exit 0 ;;
       esac
       deny "doc-writer may only write under docs/, <pkg>/docs/, specs/, <pkg>/specs/. '$rel' is out of scope." ;;
+    spec-creator)
+      case "$rel" in
+        e2e/specs/*) deny "e2e/specs/ holds browser flows, not feature specs." ;;
+        docs/*|*/docs/*) deny "docs/ describes today's behavior and architecture; spec-creator writes feature specs only." ;;
+        */README.md|README.md) deny "spec-creator must not rewrite '$rel'; suggest the change in the report instead." ;;
+        specs/*.md|*/specs/*.md) exit 0 ;;
+      esac
+      deny "spec-creator may only write .md files under specs/ or <module>/specs/. '$rel' is out of scope." ;;
     *) deny "profile '$profile' has no write access." ;;
   esac
 fi
@@ -53,7 +62,7 @@ if [ "$tool" = "Bash" ]; then
   # Allowlist for read-mostly profiles: every segment must match.
   case "$profile" in
     plan-verifier) allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?|pnpm (typecheck|test|exec vitest .*)|npm (test|run typecheck)|(\./)?scripts/check-all\.sh( --(force|build))*)( .*)?$' ;;
-    doc-writer)    allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?)$' ;;
+    doc-writer|spec-creator) allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?)$' ;;
     *) deny "profile '$profile' has no Bash access." ;;
   esac
   segs="$(printf '%s' "$cmd" | sed -E 's/(&&|\|\||;|\|)/\n/g')"

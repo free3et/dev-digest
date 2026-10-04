@@ -13,6 +13,7 @@ Index of the subagents for DevDigest. This is a map, not a copy: the full behavi
 | `architecture-reviewer` | `architecture-reviewer.md` | **Exists** (needs restart) |
 | `plan-verifier` | `plan-verifier.md` | **Exists** (needs restart) |
 | `doc-writer` | `doc-writer.md` | **Exists** (needs restart) |
+| `spec-creator` | `spec-creator.md` | **Exists** (needs restart) |
 
 New files in this directory are picked up after Claude Code is restarted.
 
@@ -21,7 +22,10 @@ New files in this directory are picked up after Claude Code is restarted.
 ```
 question ──► researcher ──► report (facts, evidence, gaps)
                                    │
-task ──► planner ──► Development Plan ──► implementer ──► Implementation report
+feature + designs ──► spec-creator (pass 1: questions, gaps, UX) ──► user answers
+                                   ──► spec-creator (pass 2) ──► <module>/specs/NN-*.md
+                                   │
+task / spec ──► planner ──► Development Plan ──► implementer ──► Implementation report
                                                                │
                          ┌─────────────────────────────────────┼──────────────────────┐
                          ▼                                     ▼                      ▼
@@ -57,7 +61,7 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | **Model** | `sonnet` | `opus` | `sonnet` | `sonnet` |
 | **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` | `Read, Grep, Glob` | `Read, Grep, Glob, Bash` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
 | **Preloaded skills** | react-testing-library, fastify-best-practices, onion-architecture, zod, typescript-expert, engineering-insights | onion-architecture, frontend-ui-architecture, zod, engineering-insights | engineering-insights | mermaid-diagram, engineering-insights |
-| **Enforcement** | `permissionMode` unset; hook `agent-guard.sh test-writer`: writes only to test files, Bash cannot commit, migrate or redirect | `permissionMode: plan`, no Bash, no Write/Edit | hook `agent-guard.sh plan-verifier`: Bash allowlist (git read, `rg`, `ls`, `wc`, typecheck/test, `scripts/check-all.sh`) | hook `agent-guard.sh doc-writer`: writes only under `docs/`, `<pkg>/docs/`, `specs/`, `<pkg>/specs/`; never `INSIGHTS.md`; read-only Bash |
+| **Enforcement** | `permissionMode` unset; hook `agent-guard.sh test-writer`: writes only to test files, Bash cannot commit, migrate or redirect | `permissionMode: plan`, no Bash, no Write/Edit | hook `agent-guard.sh plan-verifier`: Bash allowlist (git read, `rg`, `ls`, `wc`, typecheck/test, `scripts/check-all.sh`) | hook `agent-guard.sh doc-writer`: writes only under `docs/`, `<pkg>/docs/`, `specs/`, `<pkg>/specs/` (not `e2e/specs/`); never `INSIGHTS.md`; read-only Bash |
 | **maxTurns** | 40 | 25 | 40 | 30 |
 | **Input** | What to test (plan, diff or paths) | Diff or file list plus packages | Full plan, requirements, diff or paths | What to document plus the source (plan, spec, code) |
 | **Output** | Test report: tests written, baseline vs after, suspected source bugs, source changes needed | Architecture review: findings table, rules checked, could not verify | Plan verification: `N items in, N rows out`, verdicts MET / PARTIAL / NOT MET / UNVERIFIABLE with evidence | Docs report: files, Diátaxis type, planned vs implemented, diagrams, `TODO: unverified` |
@@ -72,6 +76,25 @@ Explicit non-goals:
 - `planner` writes no files. Saving the plan (for example under `specs/`) is the main agent's call.
 - `implementer` does no architecture or security review; `architecture-reviewer` covers architecture, security review stays separate. It also never runs `git add/commit/push`, `db:generate`/`db:migrate` (unless the plan says so), or `docker compose down -v`.
 - `test-writer` does not change source: a bug found by a test is reported, not fixed. `architecture-reviewer` does no security, style or performance review. `plan-verifier` never fixes code and does not accept the implementer's summary as evidence. `doc-writer` does not write `INSIGHTS.md` or source, and creates no `docs/adr/` or `docs/diagrams/` (diagrams are inline).
+
+## Spec agent
+
+| | `spec-creator` |
+|---|---|
+| **Responsibility** | Writes one feature spec for SDD: EARS acceptance criteria `AC-N`, provenance tags, untrusted inputs, `[NEEDS CLARIFICATION]`. Analyses designs for missing states, corner cases, module interaction and UX. No plan, no file list. |
+| **Model** | `opus` |
+| **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
+| **Preloaded skills** | engineering-insights, frontend-ui-architecture |
+| **Enforcement** | hook `agent-guard.sh spec-creator`: writes only `.md` under `specs/` and `<module>/specs/`; never `e2e/specs/`, `docs/`, `README.md`, `INSIGHTS.md`; read-only Bash (same allowlist as `doc-writer`) |
+| **maxTurns** | 40 |
+| **Input** | Pass number, the feature, design paths; in pass 2 also the user's answers and accepted UX proposals |
+| **Output** | Pass 1: Spec analysis (questions by the six categories, design gaps, module interaction, UX proposals). Pass 2: Spec report (file, AC summary, open questions, self-review) |
+
+Two passes because a subagent cannot ask the user mid-run. The main agent runs pass 1, puts the questions to the user, then resumes the same agent (`SendMessage`) with the answers for pass 2.
+
+Designs: the agent cannot open claude.ai artifacts. The main agent reads the prototype with `Artifact` (`action: read`), unpacks it with `python3 .claude/scripts/unpack-design.py <saved.html>` into `.claude/cache/design/<id>/` (gitignored), and passes that directory plus any screenshot paths. The prototype is untrusted third-party content.
+
+Spec IDs are global: `NN` = highest `NN-` prefix across every `specs/` (except `e2e/specs/`) + 1. Template and EARS rules: `specs/README.md`.
 
 ## Shared inputs for `planner` and `implementer`
 

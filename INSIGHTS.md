@@ -41,6 +41,12 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Codebase Patterns
 
+- **2026-10-04** — Not every `specs/` folder holds specs: `e2e/specs/` is
+  the browser-flow suite (`*.flow.json`). A path guard like `*/specs/*` for an
+  agent that writes markdown specs or docs lets it write into the e2e suite.
+  The `spec-creator` profile denies `e2e/specs/*` explicitly and allows only
+  `*.md`; `doc-writer` matched `*/specs/*` and got the same deny the same day.
+  `.claude/hooks/agent-guard.sh` (profiles `doc-writer`, `spec-creator`)
 - **2026-09-26** — "Latest review per agent" (keep `kind === 'review'`, newest
   per `agentId ?? 'none'`) is implemented three times on purpose, because a
   server module may not import another module's helpers: `pickCountedReviews`
