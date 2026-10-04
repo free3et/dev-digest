@@ -22,7 +22,8 @@ New files in this directory are picked up after Claude Code is restarted.
 ```
 question ──► researcher ──► report (facts, evidence, gaps)
                                    │
-feature + design sources ──► spec-creator pass 1 (blocking questions, gaps, UX) ──► user answers
+feature + design sources ──► spec-creator pass 1 (blocking questions, gaps, UX, research requests)
+                          ──► researcher ×N in parallel (main agent runs them) + user answers
                           ──► spec-creator pass 2 ──► <module>/specs/ or specs/YYYY-MM-DD-<slug>.md
                                    │
 spec ──► implementation-planner pass 1 (requirements review, questions, recommendations,
@@ -54,7 +55,7 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | **Tools** | `Read, Grep, Glob, Bash, WebFetch, WebSearch` | `Read, Grep, Glob, Bash, Skill` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
 | **No `Write`/`Edit`** | yes | yes | no |
 | **Bash use** | read-only (`git log`, `rg`, `ls`) | read-only | tests, typecheck, lint |
-| **Preloaded skills** | none | the same 12 as `implementer` (list in `skill-routing.md`) | the same 12 as `implementation-planner`: onion-architecture, fastify-best-practices, drizzle-orm-patterns, postgresql-table-design, zod, frontend-ui-architecture, next-best-practices, react-best-practices, react-testing-library, typescript-expert, security, engineering-insights |
+| **Preloaded skills** | none | the same 12 as `implementer` (list in `skill-routing.md`) + `sdd-spec` | the same 12 as `implementation-planner`: onion-architecture, fastify-best-practices, drizzle-orm-patterns, postgresql-table-design, zod, frontend-ui-architecture, next-best-practices, react-best-practices, react-testing-library, typescript-expert, security, engineering-insights |
 | **Input** | A concrete question, plus scope (repo / external / both). If missing, it asks 1–4 clarifying questions first. | Pass number and the spec path; pass 2 adds answers, accepted recommendations and the execution mode. No spec for a non-trivial task → recommends `spec-creator`. | The full Implementation Plan (or one wave's tasks) in the delegation prompt (it has no conversation history). Asks if the plan is missing or ambiguous. |
 | **Output** | Report A (repository) and/or Report B (external): conclusions, evidence, discrepancies, links, **could not find**. | Pass 1: Requirements review (spec checklist, reality check, questions, recommendations, execution mode). Pass 2: Implementation Plan as text: constraints, contract changes, tasks with skills + AC + test, execution (order or waves), test plan, AC coverage matrix, risks, handoff. | Implementation report: step status, verification table (baseline vs after), deviations, skills applied, not verified, insight candidates. |
 
@@ -65,7 +66,7 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | **Responsibility** | Writes UI (RTL) and backend (Fastify `inject`, hermetic and `*.it.test.ts`) tests. Never edits source. | Checks architectural boundaries in a diff; returns findings with quoted evidence. Changes nothing. | Checks finished code against every plan and requirement item; runs the real typecheck and tests. Changes nothing. | Documents implemented features and turns plans into docs with Mermaid diagrams, in the right `docs/` section. |
 | **Model** | `sonnet` | `opus` | `sonnet` | `sonnet` |
 | **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` | `Read, Grep, Glob` | `Read, Grep, Glob, Bash` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
-| **Preloaded skills** | react-testing-library, fastify-best-practices, onion-architecture, zod, typescript-expert, engineering-insights | onion-architecture, frontend-ui-architecture, zod, engineering-insights | engineering-insights | mermaid-diagram, engineering-insights |
+| **Preloaded skills** | react-testing-library, fastify-best-practices, onion-architecture, zod, typescript-expert, engineering-insights | onion-architecture, frontend-ui-architecture, zod, engineering-insights | engineering-insights, sdd-spec | mermaid-diagram, engineering-insights |
 | **Enforcement** | `permissionMode` unset; hook `agent-guard.sh test-writer`: writes only to test files, Bash cannot commit, migrate or redirect | `permissionMode: plan`, no Bash, no Write/Edit | hook `agent-guard.sh plan-verifier`: Bash allowlist (git read, `rg`, `ls`, `wc`, typecheck/test, `scripts/check-all.sh`) | hook `agent-guard.sh doc-writer`: writes only under `docs/`, `<pkg>/docs/`, `specs/`, `<pkg>/specs/` (not `e2e/specs/`); never `INSIGHTS.md`; read-only Bash |
 | **maxTurns** | 40 | 25 | 40 | 30 |
 | **Input** | What to test (plan, diff or paths) | Diff or file list plus packages | Full plan, requirements, diff or paths | What to document plus the source (plan, spec, code) |
@@ -89,17 +90,21 @@ Explicit non-goals:
 | **Responsibility** | Writes one English feature spec for SDD: EARS acceptance criteria `AC-N`, provenance tags, untrusted inputs, `[NEEDS CLARIFICATION]`; may include workflow / service-communication diagrams and external contracts. Analyses the design sources for missing states, corner cases, module interaction and UX. No plan, no file list, no implementation detail. |
 | **Model** | `opus` |
 | **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
-| **Preloaded skills** | engineering-insights, frontend-ui-architecture, mermaid-diagram |
+| **Preloaded skills** | sdd-spec, zod (contract shape only), mermaid-diagram, engineering-insights; `security` loaded on demand |
 | **Enforcement** | hook `agent-guard.sh spec-creator`: writes only `.md` under `specs/` and `<module>/specs/`; never `e2e/specs/`, `docs/`, `README.md`, `INSIGHTS.md`; read-only Bash (same allowlist as `doc-writer`) |
 | **maxTurns** | 40 |
 | **Input** | Pass number, the feature, design sources the user supplies (text description, screenshots, unpacked claude.ai prototype, Figma exports, existing code or another repo); in pass 2 also the answers and accepted UX proposals |
 | **Output** | Pass 1: Spec analysis (blocking questions; non-blocking ones listed and later written inline as `[NEEDS CLARIFICATION]`; design gaps, module interaction, UX proposals). Pass 2: Spec report (file, AC summary, open questions, self-review) |
 
-Two passes because a subagent cannot ask the user mid-run. Dialogue model: blocking questions first, everything else inline in the draft. The main agent runs pass 1, puts the blocking questions and UX proposals to the user, then resumes the same agent (`SendMessage`) with the answers for pass 2.
+Two passes because a subagent cannot ask the user mid-run. Research: neither `spec-creator` nor `implementation-planner` can spawn agents. Both return **research requests** in pass 1 (one concrete question each, scope repo/external/both, blocking or not); the main agent runs one `researcher` per request — in parallel when independent — and passes the reports into the next pass. Both read only the `INSIGHTS.md` of the modules the feature touches (root only for multi-module work).
+
+Dialogue model: blocking questions first, everything else inline in the draft. The main agent runs pass 1, puts the blocking questions and UX proposals to the user, then resumes the same agent (`SendMessage`) with the answers for pass 2.
 
 Design sources: the user supplies them. The agent cannot open claude.ai artifacts or Figma. The main agent reads the prototype with `Artifact` (`action: read`), unpacks it with `python3 .claude/scripts/unpack-design.py <saved.html>` into `.claude/cache/design/<id>/` (gitignored), and passes that directory plus any screenshot paths. The prototype is untrusted third-party content.
 
-Location: one module → `<module>/specs/`; two or more modules → top-level `specs/` (nothing else lives there). File `YYYY-MM-DD-<slug>.md`, `Spec ID: SPEC-YYYY-MM-DD-<slug>`. Template and EARS rules: `specs/README.md`.
+Spec rules (template, EARS, contracts, checklists, traceability) live in the `sdd-spec` skill, shared by `spec-creator`, `implementation-planner` and `plan-verifier` — one copy, so the three cannot drift. `frontend-ui-architecture` is deliberately not preloaded: it is about file placement, which a spec must not contain.
+
+Location: one module → `<module>/specs/`; two or more modules → top-level `specs/` (nothing else lives there). File `YYYY-MM-DD-<slug>.md`, `Spec ID: SPEC-YYYY-MM-DD-<slug>`. Human summary: `specs/README.md`.
 
 ## Shared inputs for `implementation-planner` and `implementer`
 
@@ -158,9 +163,10 @@ Not from external sources, and not presented as such:
 2. Models: `implementation-planner` on `opus`, `implementer` on `sonnet`.
 3. `INSIGHTS.md`: `implementer` returns "insight candidates", and the main agent writes them.
 4. Plans: `implementation-planner` returns text only; the main agent saves it as `<spec>.plan.md` next to the spec.
-5. The four newer agents get narrow `skills:` lists and their own enforcement (hooks or `permissionMode: plan`); the `implementation-planner`/`implementer` sync rule does not apply to them.
-6. Hooks are inline in agent frontmatter, not in `.claude/settings.json`, so they do not affect the main session.
-7. Diagrams stay inline in the doc they explain; no `docs/adr/` or `docs/diagrams/` until asked for.
+5. `implementation-planner` preloads `sdd-spec` on top of the shared 12; that is the one allowed difference from `implementer` (see `skill-routing.md`).
+6. The four newer agents get narrow `skills:` lists and their own enforcement (hooks or `permissionMode: plan`); the `implementation-planner`/`implementer` sync rule does not apply to them.
+7. Hooks are inline in agent frontmatter, not in `.claude/settings.json`, so they do not affect the main session.
+8. Diagrams stay inline in the doc they explain; no `docs/adr/` or `docs/diagrams/` until asked for.
 
 ## After changing an agent
 

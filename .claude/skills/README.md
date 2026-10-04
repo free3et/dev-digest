@@ -17,6 +17,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Workflow | Captures non-obvious findings into the touched module's `INSIGHTS.md` |
+| [sdd-spec](sdd-spec/SKILL.md) | Workflow | Spec Driven Development rules: feature-spec template, EARS AC, contracts, checklists, AC → task → test traceability |
 
 ## What Are Skills?
 

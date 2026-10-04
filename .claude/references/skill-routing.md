@@ -33,7 +33,7 @@ Single source of truth for which project skill applies to which change. Read by 
 
 Changing one of these lists means changing this table in the same edit.
 
-**Sync rule.** `implementation-planner` and `implementer` must use the same skills for frontend and backend alike. The `skills:` lists in `.claude/agents/implementation-planner.md` and `.claude/agents/implementer.md` must stay identical, and any skill added to or removed from them changes this table and the list above in the same edit. Neither agent keeps a private skill list.
+**Sync rule.** `implementation-planner` and `implementer` must use the same skills for frontend and backend alike. The `skills:` lists in `.claude/agents/implementation-planner.md` and `.claude/agents/implementer.md` must stay identical, and any skill added to or removed from them changes this table and the list above in the same edit. Neither agent keeps a private skill list. **One exception:** `implementation-planner` also preloads `sdd-spec` (spec rules: review checklist, AC → task → test traceability). It governs reading a spec, not writing code; the `implementer` gets AC IDs through the plan, so it does not need it.
 
 ## Not routed
 
