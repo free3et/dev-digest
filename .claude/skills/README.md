@@ -18,6 +18,8 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [engineering-insights](engineering-insights/SKILL.md) | Workflow | Captures non-obvious findings into the touched module's `INSIGHTS.md` |
 | [sdd-spec](sdd-spec/SKILL.md) | Workflow | Spec Driven Development rules: feature-spec template, EARS AC, contracts, checklists, AC → task → test traceability |
+| [run-plan](run-plan/SKILL.md) | Workflow | Manual `/run-plan`: implementer → architecture-reviewer + plan-verifier → capped fix loop → AC report with retro |
+| [workflow-retro](workflow-retro/SKILL.md) | Workflow | Manual `/workflow-retro`: orchestration retrospective of a multi-agent run (tokens, agent order, handoffs, recommendations); `--deep` reads transcripts via `researcher`; writes `docs/retro/ledger/` |
 
 ## What Are Skills?
 
