@@ -46,6 +46,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Codebase Patterns
 
+- **2026-10-05** — The clone's working tree is always the default branch:
+  `sync` runs `reset --hard origin/<default>`, and a PR head exists only as
+  the ref `pr-<n>`. Anything that reads repo files from the tree (e.g. project
+  context docs) sees local edits but never the PR's changes, and a resync wipes
+  those edits. `readFile` follows symlinks; `readFileAt(ref, path)` does not, so
+  a tree read needs its own `lstat`/`realpath` guard.
+  `server/src/adapters/git/simple-git.ts:79-95,136-168`
+
 - **2026-10-01** — `repoIntel.getBlastRadius` is shallower than its types
   suggest, and `GET /pulls/:id/blast` inherits every gap. `MAX_CALLERS_PER_SYMBOL`
   (20) is applied as one global cut after the rank sort, so a symbol can lose
