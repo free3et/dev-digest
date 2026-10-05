@@ -66,7 +66,7 @@ and provenance).
 sequenceDiagram
   participant Page as client: Project Context page
   participant API as server: GET/PUT /repos/:id/context…
-  participant Clone as clone working tree (server/clones)
+  participant Clone as clone dir (`DEVDIGEST_CLONE_DIR`)
   Page->>API: GET /repos/:id/context
   API->>Clone: walk search roots (regular .md files only)
   API-->>Page: ContextDocList (documents, refreshed_at, cloned)
@@ -190,7 +190,7 @@ updated after the server copy.
   AC-13.
 - **EC-7** Resync (`git reset --hard origin/<branch>`) after an edit erases it →
   accepted risk, banner AC-15, NG-6 (sync behaviour: see Inputs and provenance).
-- **EC-8** 1000+ documents → rendered without pagination (C-12);.
+- **EC-8** 1000+ documents → rendered without pagination (C-12) → AC-5.
 - **EC-9** Non-ASCII content → `approx_tokens` counts characters, not bytes
   (AC-2); `size` stays bytes.
 
@@ -267,7 +267,7 @@ view; no background job).
 | EC-4, EC-5 | AC-1, AC-11 |
 | EC-6 | AC-13 |
 | EC-7 | AC-15, NG-6 |
-| EC-8 | |
+| EC-8 | AC-5 (one row per document, no pagination — C-12) |
 | EC-9 | AC-2 |
 
 ## Clarifications
