@@ -61,7 +61,7 @@ if [ "$tool" = "Bash" ]; then
 
   # Allowlist for read-mostly profiles: every segment must match.
   case "$profile" in
-    plan-verifier) allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?|pnpm (typecheck|test|exec vitest .*)|npm (test|run typecheck)|(\./)?scripts/check-all\.sh( --(force|build))*)( .*)?$' ;;
+    plan-verifier) allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?|pnpm (typecheck|test|exec vitest .*)|npm (test|run typecheck)|(\./)?scripts/check-all\.sh( --(force|build))*|(\./)?scripts/check-pkg\.sh .*)( .*)?$' ;;
     doc-writer|spec-creator) allow='^(cd [^ ]+|git (diff|log|show|status|blame)( .*)?|rg( .*)?|ls( .*)?|wc( .*)?)$' ;;
     *) deny "profile '$profile' has no Bash access." ;;
   esac

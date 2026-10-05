@@ -31,7 +31,10 @@ spec ──► implementation-planner pass 1 (requirements review, questions, re
      ──► implementation-planner pass 2 ──► Implementation Plan (T-n → AC-n → test)
                                    │      saved by the main agent as <spec>.plan.md
                                    ▼
+      main agent: scripts/check-all.sh (baseline, once) ──► passes tree hash + result into every implementer prompt
+                                   ▼
                      implementer (single) or implementers per wave (multi-agent) ──► Implementation report
+                     (per step: scripts/check-pkg.sh <pkg> <files>)            main agent: check-all.sh after each wave
                                                                │
                          ┌─────────────────────────────────────┼──────────────────────┐
                          ▼                                     ▼                      ▼
@@ -44,6 +47,8 @@ spec ──► implementation-planner pass 1 (requirements review, questions, re
 
 Security review is still separate (`security-review` skill), not an agent here.
 
+`/run-plan <spec> [--plan] [--notes] [--design]` automates the lower half of the diagram (implementer → architecture-reviewer + plan-verifier → capped fix loop); `test-writer` and `doc-writer` stay manual. Afterwards, `/workflow-retro` (manual only) can retrospect on how the agents coordinated.
+
 Only the main agent delegates. No agent below has the `Agent` tool, so none of them spawns further subagents.
 
 ## Agents
@@ -54,9 +59,9 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | **Model** | `sonnet` | `opus` | `sonnet` |
 | **Tools** | `Read, Grep, Glob, Bash, WebFetch, WebSearch` | `Read, Grep, Glob, Bash, Skill` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
 | **No `Write`/`Edit`** | yes | yes | no |
-| **Bash use** | read-only (`git log`, `rg`, `ls`) | read-only | tests, typecheck, lint |
-| **Preloaded skills** | none | the same 12 as `implementer` (list in `skill-routing.md`) + `sdd-spec` | the same 12 as `implementation-planner`: onion-architecture, fastify-best-practices, drizzle-orm-patterns, postgresql-table-design, zod, frontend-ui-architecture, next-best-practices, react-best-practices, react-testing-library, typescript-expert, security, engineering-insights |
-| **Input** | A concrete question, plus scope (repo / external / both). If missing, it asks 1–4 clarifying questions first. | Pass number and the spec path; pass 2 adds answers, accepted recommendations and the execution mode. No spec for a non-trivial task → recommends `spec-creator`. | The full Implementation Plan (or one wave's tasks) in the delegation prompt (it has no conversation history). Asks if the plan is missing or ambiguous. |
+| **Bash use** | read-only (`git log`, `rg`, `ls`) | read-only | `scripts/check-pkg.sh` per step, lint; never `check-all.sh` when given a baseline |
+| **Preloaded skills** | none | core (onion-architecture, frontend-ui-architecture, engineering-insights) + `sdd-spec`; domain skills through `Skill` only when a task's design depends on one | core only: onion-architecture, frontend-ui-architecture, engineering-insights; domain skills through `Skill` per task, from the plan / routing table, each at most once |
+| **Input** | A concrete question, plus scope (repo / external / both). If missing, it asks 1–4 clarifying questions first. | Pass number and the spec path; pass 2 adds answers, accepted recommendations and the execution mode. No spec for a non-trivial task → recommends `spec-creator`. | The plan path and its own task IDs (or the plan text), plus the baseline `check-all.sh` result from the main session. Asks if the plan is missing or ambiguous. |
 | **Output** | Report A (repository) and/or Report B (external): conclusions, evidence, discrepancies, links, **could not find**. | Pass 1: Requirements review (spec checklist, reality check, questions, recommendations, execution mode). Pass 2: Implementation Plan as text: constraints, contract changes, tasks with skills + AC + test, execution (order or waves), test plan, AC coverage matrix, risks, handoff. | Implementation report: step status, verification table (baseline vs after), deviations, skills applied, not verified, insight candidates. |
 
 ## Review, test and docs agents
@@ -64,15 +69,17 @@ Only the main agent delegates. No agent below has the `Agent` tool, so none of t
 | | `test-writer` | `architecture-reviewer` | `plan-verifier` | `doc-writer` |
 |---|---|---|---|---|
 | **Responsibility** | Writes UI (RTL) and backend (Fastify `inject`, hermetic and `*.it.test.ts`) tests. Never edits source. | Checks architectural boundaries in a diff; returns findings with quoted evidence. Changes nothing. | Checks finished code against every plan and requirement item; runs the real typecheck and tests. Changes nothing. | Documents implemented features and turns plans into docs with Mermaid diagrams, in the right `docs/` section. |
-| **Model** | `sonnet` | `opus` | `sonnet` | `sonnet` |
+| **Model** | `sonnet` | `sonnet` (was `opus`: cost) | `sonnet` | `sonnet` |
 | **Tools** | `Read, Grep, Glob, Edit, Write, Bash, Skill` | `Read, Grep, Glob` | `Read, Grep, Glob, Bash` | `Read, Grep, Glob, Edit, Write, Bash, Skill` |
 | **Preloaded skills** | react-testing-library, fastify-best-practices, onion-architecture, zod, typescript-expert, engineering-insights | onion-architecture, frontend-ui-architecture, zod, engineering-insights | engineering-insights, sdd-spec | mermaid-diagram, engineering-insights |
 | **Enforcement** | `permissionMode` unset; hook `agent-guard.sh test-writer`: writes only to test files, Bash cannot commit, migrate or redirect | `permissionMode: plan`, no Bash, no Write/Edit | hook `agent-guard.sh plan-verifier`: Bash allowlist (git read, `rg`, `ls`, `wc`, typecheck/test, `scripts/check-all.sh`) | hook `agent-guard.sh doc-writer`: writes only under `docs/`, `<pkg>/docs/`, `specs/`, `<pkg>/specs/` (not `e2e/specs/`); never `INSIGHTS.md`; read-only Bash |
 | **maxTurns** | 40 | 25 | 40 | 30 |
+
+`implementer` has `maxTurns: 80` and a fix-loop cap of 3 attempts per distinct error, then `blocked`.
 | **Input** | What to test (plan, diff or paths) | Diff or file list plus packages | Full plan, requirements, diff or paths | What to document plus the source (plan, spec, code) |
 | **Output** | Test report: tests written, baseline vs after, suspected source bugs, source changes needed | Architecture review: findings table, rules checked, could not verify | Plan verification: `N items in, N rows out`, verdicts MET / PARTIAL / NOT MET / UNVERIFIABLE with evidence | Docs report: files, Diátaxis type, planned vs implemented, diagrams, `TODO: unverified` |
 
-These four also have no `Agent` tool. Their skill lists are narrower than the `implementation-planner`/`implementer` set on purpose: `skills:` preloads full content into context.
+These four also have no `Agent` tool. Every agent keeps its `skills:` list narrow on purpose: `skills:` preloads the full `SKILL.md` into every turn.
 
 The hooks live in `.claude/hooks/agent-guard.sh` and are attached inline in each agent's frontmatter, so they apply only while that agent runs. They are a best-effort guard, not a sandbox: a `tools` allowlist does not stop Bash from writing, so the script blocks git history changes, migrations, `docker compose down`, file-mutating commands and redirects. Hook behavior inside subagents has been tested against synthetic hook input only; confirm it after a restart (see below).
 
@@ -160,13 +167,16 @@ Not from external sources, and not presented as such:
 ## Decisions
 
 1. Skill routing lives in one shared file, not duplicated in each agent.
-2. Models: `implementation-planner` on `opus`, `implementer` on `sonnet`.
+2. Models: `implementation-planner` on `opus`, everything else on `sonnet` (`architecture-reviewer` moved off `opus` for cost; offset by a confidence floor of 0.5 and auto-fix of blocker/high only in `/run-plan`).
+2a. `/run-plan` (skill `run-plan`) orchestrates implementer → architecture-reviewer + plan-verifier → fix loop (max 2 rounds). `spec-creator`, `implementation-planner` and `test-writer` are not part of it; run them by hand.
 3. `INSIGHTS.md`: `implementer` returns "insight candidates", and the main agent writes them.
 4. Plans: `implementation-planner` returns text only; the main agent saves it as `<spec>.plan.md` next to the spec.
-5. `implementation-planner` preloads `sdd-spec` on top of the shared 12; that is the one allowed difference from `implementer` (see `skill-routing.md`).
+5. `implementation-planner` preloads `sdd-spec` on top of the shared core; that is the one allowed difference from `implementer` (see `skill-routing.md`).
 6. The four newer agents get narrow `skills:` lists and their own enforcement (hooks or `permissionMode: plan`); the `implementation-planner`/`implementer` sync rule does not apply to them.
 7. Hooks are inline in agent frontmatter, not in `.claude/settings.json`, so they do not affect the main session.
 8. Diagrams stay inline in the doc they explain; no `docs/adr/` or `docs/diagrams/` until asked for.
+9. `implementation-planner` and `implementer` preload only the core (`onion-architecture`, `frontend-ui-architecture`, `engineering-insights`); domain skills load on demand through `Skill`. The old shared set of 12 was ~118 KB ≈ 30k tokens in every turn of every implementer. Consistency between plan and implementation comes from the routing table, not from identical preloads.
+10. Checks: the main agent runs `scripts/check-all.sh` (baseline once, then after each wave) and passes the result into prompts; `implementer` runs only `scripts/check-pkg.sh` (related tests, errors-only output). Parallel implementers share one working tree, so a full run from inside a wave is unreliable as well as wasted.
 
 ## After changing an agent
 

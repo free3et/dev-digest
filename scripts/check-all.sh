@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run typecheck + hermetic tests for server, reviewer-core, devdigest-mcp and client ONCE per
 # working-tree state, and cache the result keyed by a hash of that state.
+# In an SDD run the main session (orchestrator) runs this: once as the baseline before the
+# implementers start, once after each wave. Implementers use scripts/check-pkg.sh per step.
 #
 #   scripts/check-all.sh            # reuse the cached result when the tree is unchanged
 #   scripts/check-all.sh --force    # ignore the cache and re-run
@@ -48,31 +50,24 @@ failed=0
   echo "ran:  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$out"
 
-# step <label> <dir> <command...>
-step() {
-  local label="$1" dir="$2"; shift 2
-  local start end code log
+# Each package goes through scripts/check-pkg.sh: one summary line per part on success,
+# the TS errors / failed-test details on failure (no blind `tail`, which used to cut them off).
+for pkg in server reviewer-core devdigest-mcp client; do
+  log="$("$root/scripts/check-pkg.sh" "$pkg" 2>&1)"; code=$?
+  [ "$code" -ne 0 ] && failed=1
+  { echo; echo "## ${pkg}  (exit ${code})"; printf '%s\n' "$log"; } >> "$out"
+done
+
+if [ "$build" = 1 ]; then
   start=$(date +%s)
-  log="$( (cd "$dir" && "$@") 2>&1 )"; code=$?
-  end=$(date +%s)
+  log="$( (cd client && pnpm build) 2>&1 )"; code=$?
   [ "$code" -ne 0 ] && failed=1
   {
     echo
-    echo "## ${label}  (exit ${code}, $((end - start))s)"
-    echo "\$ (cd ${dir} && $*)"
-    printf '%s\n' "$log" | tail -n 12
+    echo "## client build  (exit ${code}, $(( $(date +%s) - start ))s)"
+    if [ "$code" -ne 0 ]; then printf '%s\n' "$log" | grep -iE -A 6 'error|failed' | head -n 60; fi
   } >> "$out"
-}
-
-step "server typecheck"       server        pnpm typecheck
-step "server unit tests"      server        pnpm exec vitest run --exclude '**/*.it.test.ts'
-step "reviewer-core typecheck" reviewer-core npm run typecheck
-step "reviewer-core tests"    reviewer-core npm test
-step "devdigest-mcp typecheck" devdigest-mcp npm run typecheck
-step "devdigest-mcp tests"    devdigest-mcp npm test
-step "client typecheck"       client        pnpm typecheck
-step "client tests"           client        pnpm test
-[ "$build" = 1 ] && step "client build" client pnpm build
+fi
 
 {
   echo

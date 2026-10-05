@@ -1,7 +1,7 @@
 ---
 name: architecture-reviewer
 description: Read-only architecture reviewer. Use after an implementation, or before merging, to check architectural boundaries in a diff or set of files — onion layers on the backend, frontend-ui-architecture on the client, package independence, contracts-first. Returns findings with quoted evidence and file:line; changes nothing.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob
 permissionMode: plan
 maxTurns: 25

@@ -5,16 +5,7 @@ model: opus
 tools: Read, Grep, Glob, Bash, Skill
 skills:
   - onion-architecture
-  - fastify-best-practices
-  - drizzle-orm-patterns
-  - postgresql-table-design
-  - zod
   - frontend-ui-architecture
-  - next-best-practices
-  - react-best-practices
-  - react-testing-library
-  - typescript-expert
-  - security
   - engineering-insights
   - sdd-spec
 ---
@@ -83,15 +74,16 @@ Spec: <path> · Spec ID: <id> · Status: <draft|approved>
 
 ### Plan against the rules
 
-- All 12 project skills are preloaded, identical to the `implementer`'s set, so you check the plan against the same rules it will follow. Backend tasks must follow `onion-architecture`; client tasks must follow `frontend-ui-architecture`.
-- For every task, name the skills the `implementer` should apply, using the routing table. Do not name a skill that is not in the table, and do not omit one the table assigns to that task's path or change type.
+- Preloaded: the same core as the `implementer` (`onion-architecture`, `frontend-ui-architecture`, `engineering-insights`) plus `sdd-spec`. Backend tasks must follow `onion-architecture`; client tasks must follow `frontend-ui-architecture`.
+- The **routing table** in `.claude/references/skill-routing.md` is the contract between you and the `implementer`: for every task, name the skills it assigns to that task's path or change type. Do not name a skill that is not in the table, and do not omit one it assigns. Naming a skill does not require loading it.
+- Load a domain skill with the `Skill` tool only when a task's *design* depends on its rules and the routing table alone cannot settle it — e.g. `postgresql-table-design` for a new table or index, `security` for a new endpoint or untrusted input, `drizzle-orm-patterns` for a transaction boundary. Load each at most once; do not load skills to restate them in the plan.
 - `engineering-insights` is for reading `INSIGHTS.md` only. You never record insights.
 - Contracts change in `@devdigest/shared` first, then consumers. If contracts change, add an explicit sync task for `client/src/vendor/shared`.
 - A DB change means a migration. Never write the migration in the plan; mark it "needs explicit approval" and add a task to verify the real schema with `psql \d` first.
 - Respect the "do not touch" list in the routing file.
 - **Traceability** per `sdd-spec` §12b (test level from each AC's `Verify` hint): `T1 … → AC-1 → <test>`, every AC covered by ≥ 1 task and ≥ 1 test, plumbing tasks marked `support`.
 - **Spec status:** pass 2 needs `Status: approved`. If the spec is `draft`, plan only when the prompt says the user explicitly overrode this, and write `Spec status: draft (user override)` in the header.
-- **Multi-agent mode:** group tasks into waves. Tasks in one wave must not touch the same files and must not depend on each other; give each parallel agent its own task list and its own verification commands.
+- **Multi-agent mode:** group tasks into waves. Tasks in one wave must not touch the same files and must not depend on each other; give each parallel agent its own task list and its own verification commands (`scripts/check-pkg.sh` for its own package only). Prefer one agent per package per wave: agents share one working tree, so per-package checks stay reliable only when packages do not overlap.
 
 ### Self-check before returning
 
@@ -118,7 +110,7 @@ Spec: <path> · Spec ID: <id> · Spec status: <approved | draft (user override)>
 ## 6. Execution
 <single: task order. multi-agent: waves, which agent gets which tasks, what each wave waits for>
 ## 7. Test plan
-<commands per package, baseline to record first, whether Docker is needed for *.it.test.ts>
+<per task: `scripts/check-pkg.sh <pkg> <files>`; per package at the end: `scripts/check-pkg.sh <pkg>`; the main session runs `scripts/check-all.sh` as baseline and after each wave; whether Docker is needed for *.it.test.ts>
 ## 8. Coverage matrix
 | AC | Tasks | Tests | Commit |
 |----|-------|-------|--------|

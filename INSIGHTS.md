@@ -68,6 +68,17 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Tool & Library Notes
 
+- **2026-10-04** — For agent-facing test runs, raw `pnpm test` output is the
+  token sink, not test time (all four packages run in ~15 s). A blind
+  `tail -n 12` is no fix: vitest prints the `Failed Tests` block *above* the
+  summary, so the tail kept the counts and dropped the assertion, and the
+  agent re-ran the raw suite to see it (this is what `check-all.sh` did until
+  today). What works: `vitest related --run --reporter=dot --silent
+  --passWithNoTests <files>` with `NO_COLOR=1`, then print from the
+  `Failed Tests` line on. `related` accepts a test file as well as source
+  files, and in `server/` it needs `--exclude '**/*.it.test.ts'` like `run`.
+  `scripts/check-pkg.sh`
+
 - **2026-09-25** — A `tools` allowlist does not make a subagent read-only
   while it has `Bash`: `> file`, `tee` and `sed -i` still write, and
   `permissionMode: plan` does not close that gap. `architecture-reviewer`
@@ -142,6 +153,11 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   `docs/improvement-plan.md` and check that the report cites layering rules;
   if it does not, move the skills into the delegation prompt.
   `.claude/agents/implementer.md:6-8`
+  - **2026-10-04** — Now matters more: both agents preload only the core
+    (`onion-architecture`, `frontend-ui-architecture`, `engineering-insights`)
+    and load domain skills through `Skill` on demand. Also check that the
+    implementer report's "Skills applied" lists the on-demand ones the plan
+    named. `.claude/agents/implementer.md:7-10`
 
 - **2026-08-05** — Is `repoIntel.getConventionSamples()` filtering tests out right for this feature? It reuses the review-context rank filter (`isJunkPath` drops `.test.`/`.spec.`), so testing conventions — some of the most useful house rules — are structurally invisible to the extractor. Evidence: `server/src/modules/repo-intel/service.ts:629-630,709-728`.
   **Fixed 2026-09-20** — `isJunkPath` is unchanged; extract adds
