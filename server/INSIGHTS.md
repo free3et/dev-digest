@@ -53,6 +53,19 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   those edits. `readFile` follows symlinks; `readFileAt(ref, path)` does not, so
   a tree read needs its own `lstat`/`realpath` guard.
   `server/src/adapters/git/simple-git.ts:79-95,136-168`
+  - **2026-10-06** — Audited for project-context writes, so a local `.md` edit
+    in the clone is safe: every working-tree reader gates by extension before
+    it reads (`walkClone` `SUPPORTED_EXT`, `parseChangedFiles`, ripgrep
+    `symbols`/`references` `CODE_EXT`, conventions `CONFIG_FILES`), and review
+    input is commit-based (`git.diff`, `readFileAt`). `sync` is the only thing
+    that touches tracked files (`reset --hard`, no `clean`), so an untracked
+    `.<name>.<rand>.tmp` left by a crashed write survives a resync — keep the
+    `.tmp` suffix, the indexers rely on the extension allowlist, not on
+    dotfile hiding. The one ungated reader is `RipgrepCodeIndex.grepWithNode`,
+    which has no non-test caller; a new caller would see `.md` and temp files.
+    The clone dir defaults to `~/.devdigest/workspace` (`DEVDIGEST_CLONE_DIR`),
+    not `server/clones/` as `server/CLAUDE.md` says.
+    `src/adapters/codeindex/ripgrep.ts:83-92`, `src/platform/config.ts:86-88`
 
 - **2026-10-01** — `repoIntel.getBlastRadius` is shallower than its types
   suggest, and `GET /pulls/:id/blast` inherits every gap. `MAX_CALLERS_PER_SYMBOL`
@@ -115,6 +128,15 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-08-05** — `src/adapters/` is not a pure IO ring: it also holds pure functions that services legitimately import, so an import-path rule of the form "services must not import `adapters/*`" would flag correct code — classify by whether the code leaves the process, not by folder. Evidence: `src/adapters/git/diff-parser.ts:14` (`parseUnifiedDiff`, imported by `src/modules/reviews/diff-loader.ts:3`), `src/adapters/codeindex/extract.ts:182` (`extractEndpoints`, imported by `src/modules/repo-intel/service.ts:22`).
 
 ## Tool & Library Notes
+
+- **2026-10-06** — To assert a log line in an `app.inject` test: `buildApp` takes
+  no logger or stream and `pino` is not a direct dependency (only
+  `pino-pretty`), so it cannot be imported under pnpm. Wrap `app.log.child`
+  and record each child's `info` call; this works at `LOG_LEVEL=warn` because
+  the wrapper sees calls regardless of level, and the handler must log via
+  `req.log.info(...)` (a call on `app.log` is not captured). Also,
+  `pnpm typecheck` excludes `server/test/**`, so only vitest catches type
+  errors in a test file. `test/project-context.it.test.ts` (NFR-4 case)
 
 - **2026-09-25** — `StructuredRequest` (`src/vendor/shared/adapters.ts:55`) has
   no abort `signal` and neither the server LLM adapters nor reviewer-core's

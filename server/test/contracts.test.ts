@@ -17,6 +17,8 @@ import {
   Settings,
   Repo,
   PrDetail,
+  ContextDocWrite,
+  CONTEXT_DOC_MAX_BYTES,
 } from '@devdigest/shared';
 
 /**
@@ -238,5 +240,21 @@ describe('BlastRadiusResponse', () => {
     expect(BlastDegradedReason.safeParse('bogus').success).toBe(false);
     const { impacted_endpoints: _omit, ...rest } = base;
     expect(() => BlastRadiusResponse.parse(rest)).toThrow();
+  });
+});
+
+describe('ContextDocWrite byte cap', () => {
+  const w = (content: string) => ContextDocWrite.safeParse({ path: 'docs/a.md', content, base_hash: 'h' });
+  it('accepts exactly the cap in bytes', () => {
+    expect(CONTEXT_DOC_MAX_BYTES).toBe(262_144);
+    expect(w('a'.repeat(262_144)).success).toBe(true);
+  });
+  it('rejects one byte over', () => {
+    expect(w('a'.repeat(262_145)).success).toBe(false);
+  });
+  it('counts UTF-8 bytes, not UTF-16 units', () => {
+    // 3 bytes each: 87_382 * 3 = 262_146 > cap, 87_381 * 3 = 262_143 fits
+    expect(w('\u20ac'.repeat(87_382)).success).toBe(false);
+    expect(w('\u20ac'.repeat(87_381)).success).toBe(true);
   });
 });

@@ -78,6 +78,7 @@ flowchart TB
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast (GET)"]
+    projectContext["project-context<br/>/repos/:id/context (GET) · /repos/:id/context/file (GET, PUT)"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
@@ -100,6 +101,7 @@ flowchart TB
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `DEVDIGEST_CONTEXT_ROOTS` | `specs,docs,insights` | Project Context search roots: comma list of folder names from that enum (no globs); an empty or unknown name fails at boot (`ConfigError`) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `PROMPT_LOG_VERBOSE` | unset | `1`/`true` adds line counts, raw sizes and per-item sizes to a stdout-only "Prompt assembled (verbose, local only)" line; needs `NODE_ENV=development` **and** a loopback `API_HOST`, else ignored with a boot warning. Never prompt text |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |

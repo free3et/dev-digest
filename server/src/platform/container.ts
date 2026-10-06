@@ -4,6 +4,7 @@ import type {
   GitHubClient,
   GitClient,
   CodeIndex,
+  ContextDocStore,
   Embedder,
   LLMProvider,
 } from '@devdigest/shared';
@@ -15,6 +16,7 @@ import { LocalSecretsProvider } from '../adapters/secrets/local.js';
 import { LocalNoAuthProvider } from '../adapters/auth/local.js';
 import { OctokitGitHubClient } from '../adapters/github/octokit.js';
 import { SimpleGitClient } from '../adapters/git/simple-git.js';
+import { FsContextDocStore } from '../adapters/context-docs/fs-store.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
 import { AnthropicProvider } from '../adapters/llm/anthropic.js';
@@ -45,6 +47,8 @@ export interface ContainerOverrides {
   git?: GitClient;
   codeIndex?: CodeIndex;
   embedder?: Embedder;
+  /** Project Context clone-tree access — tests inject MockContextDocStore. */
+  contextDocs?: ContextDocStore;
   /** Pre-built providers by id (skip key lookup). */
   llm?: Partial<Record<'openai' | 'anthropic' | 'openrouter', LLMProvider>>;
   /** repo-intel facade (T1.1+) — tests inject mock RepoIntel implementations. */
@@ -65,6 +69,7 @@ export class Container {
   private _git?: GitClient;
   private _github?: GitHubClient;
   private _codeIndex?: CodeIndex;
+  private _contextDocs?: ContextDocStore;
   private _embedder?: Embedder;
   private llmCache = new Map<string, LLMProvider>();
 
@@ -92,6 +97,13 @@ export class Container {
     if (this.overrides.git) return this.overrides.git;
     this._git ??= new SimpleGitClient(this.config.cloneDir);
     return this._git;
+  }
+
+  /** Project Context docs in the clone working tree (also the hand-off port for 1b). */
+  get contextDocs(): ContextDocStore {
+    if (this.overrides.contextDocs) return this.overrides.contextDocs;
+    this._contextDocs ??= new FsContextDocStore();
+    return this._contextDocs;
   }
 
   get agentsRepo(): AgentsRepository {

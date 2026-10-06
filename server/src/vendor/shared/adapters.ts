@@ -292,3 +292,28 @@ export interface SecretsProvider {
    */
   set?(key: SecretKey, value: string): Promise<void>;
 }
+
+// ---------- Project Context docs (clone working tree, server-side only) ----------
+export interface ContextDocEntry {
+  /** Repo-relative POSIX path. */
+  path: string;
+  /** Size in bytes. */
+  size: number;
+  /** Last modification time, epoch ms. */
+  mtime: number;
+  text: string;
+}
+
+export interface ContextDocStore {
+  /**
+   * Regular, non-symlink `.md` files under `root` whose path passes the root
+   * rules. Symlinked dirs are not descended; `node_modules`/`.git`/`vendor` are
+   * pruned; other dot-dirs are walked.
+   */
+  list(root: string, roots: string[]): Promise<ContextDocEntry[]>;
+  /** Absolute path if `path` is a safe, listed document inside `root`, else null. */
+  resolve(root: string, path: string, roots: string[]): Promise<string | null>;
+  read(abs: string): Promise<Buffer>;
+  /** Replace the file atomically (temp file in the same folder, then rename). */
+  writeAtomic(abs: string, content: string): Promise<void>;
+}
