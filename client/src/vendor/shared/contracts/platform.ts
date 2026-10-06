@@ -252,13 +252,43 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
+export const ContextDocType = z.enum(['specs', 'docs', 'insights']);
+export type ContextDocType = z.infer<typeof ContextDocType>;
+
+/** Max size of one Project Context document, in UTF-8 bytes. */
+export const CONTEXT_DOC_MAX_BYTES = 262_144;
+
 export const SpecFile = z.object({
   path: z.string(),
   content: z.string().nullish(),
   size: z.number().int().nullish(),
   updated_at: z.string().nullish(),
+  doc_type: ContextDocType,
+  approx_tokens: z.number().int().min(0),
+  content_hash: z.string().nullish(),
 });
 export type SpecFile = z.infer<typeof SpecFile>;
+
+export const ContextDocList = z.object({
+  documents: z.array(SpecFile),
+  refreshed_at: z.string(),
+  cloned: z.boolean(),
+});
+export type ContextDocList = z.infer<typeof ContextDocList>;
+
+export const ContextDocWrite = z.object({
+  path: z.string().min(1),
+  content: z
+    .string()
+    .refine((v) => new TextEncoder().encode(v).length <= CONTEXT_DOC_MAX_BYTES, {
+      message: `content exceeds ${CONTEXT_DOC_MAX_BYTES} bytes`,
+    }),
+  base_hash: z.string().min(1),
+});
+export type ContextDocWrite = z.infer<typeof ContextDocWrite>;
+
+export const ContextFileQuery = z.object({ path: z.string().min(1) });
+export type ContextFileQuery = z.infer<typeof ContextFileQuery>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

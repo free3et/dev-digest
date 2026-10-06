@@ -42,6 +42,20 @@ export function registerConventionsNav(): void {
   });
 }
 
+/** Project Context sits in WORKSPACE right after Pull Requests. Idempotent. */
+export function registerContextNav(): void {
+  const workspace = NAV.find((g) => g.section === WORKSPACE_SECTION);
+  if (!workspace || workspace.items.some((it) => it.key === "context")) return;
+  const afterPulls = workspace.items.findIndex((it) => it.key === "pulls");
+  workspace.items.splice(afterPulls < 0 ? workspace.items.length : afterPulls + 1, 0, {
+    key: "context",
+    label: "Project Context",
+    icon: "FileText",
+    href: "/repos/:repoId/context",
+  });
+}
+
 registerSkillsNav();
 registerAgentsInSkillsLab();
 registerConventionsNav();
+registerContextNav();

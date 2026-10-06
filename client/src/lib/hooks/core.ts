@@ -16,6 +16,8 @@ import type {
   PrMeta,
   PrDetail,
   SpecFile,
+  ContextDocList,
+  ContextDocWrite,
   IndexStatus,
 } from "../types";
 
@@ -123,8 +125,29 @@ export function usePullDetail(prId: string | number | null | undefined) {
 export function useContextFiles(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
+    queryFn: () => api.get<ContextDocList>(`/repos/${repoId}/context`),
     enabled: !!repoId,
+  });
+}
+
+/** One document with its content and `content_hash` (GET /repos/:id/context/file?path=). */
+export function useContextFile(repoId: string | null | undefined, path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["context-file", repoId, path],
+    queryFn: () => api.get<SpecFile>(`/repos/${repoId}/context/file?path=${encodeURIComponent(path ?? "")}`),
+    enabled: !!repoId && !!path,
+  });
+}
+
+/** Local edit of one document (PUT /repos/:id/context/file). 409 means the file changed since it was loaded. */
+export function useSaveContextFile(repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ContextDocWrite) => api.put<SpecFile>(`/repos/${repoId}/context/file`, body),
+    onSuccess: (file) => {
+      qc.setQueryData(["context-file", repoId, file.path], file);
+      return qc.invalidateQueries({ queryKey: ["context", repoId] });
+    },
   });
 }
 
