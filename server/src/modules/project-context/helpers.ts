@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto';
-import type { ContextDocEntry, ContextDocType, SpecFile } from '@devdigest/shared';
+import {
+  CONTEXT_DOC_MAX_BYTES,
+  type ContextAttachment,
+  type ContextDocEntry,
+  type ContextDocType,
+  type InheritedContextAttachment,
+  type SpecFile,
+} from '@devdigest/shared';
+import { ValidationError } from '../../platform/errors.js';
 import { isCandidatePath } from '../../adapters/context-docs/rules.js';
-import { CONTEXT_ROOT_NAMES, DEFAULT_CONTEXT_ROOTS } from './constants.js';
+import { CONTEXT_ROOT_NAMES, DEFAULT_CONTEXT_ROOTS, NOT_LISTED_MESSAGE } from './constants.js';
 
 /**
  * Parse DEVDIGEST_CONTEXT_ROOTS: comma list of folder-segment names from the
@@ -51,18 +59,19 @@ export function byPath(a: { path: string }, b: { path: string }): number {
 }
 
 /** List entries carry no content and no hash. */
-export function toListItem(entry: ContextDocEntry): SpecFile {
+export function toListItem(entry: ContextDocEntry, usedByAgents: number): SpecFile {
   return {
     path: entry.path,
     size: entry.size,
     updated_at: new Date(entry.mtime).toISOString(),
     doc_type: docTypeFor(entry.path),
     approx_tokens: approxTokens(entry.text),
+    used_by_agents: usedByAgents,
   };
 }
 
 /** A single document with content and the hash the editor sends back as `base_hash`. */
-export function toFile(path: string, bytes: Buffer): SpecFile {
+export function toFile(path: string, bytes: Buffer, usedByAgents: number): SpecFile {
   const text = bytes.toString('utf8');
   return {
     path,
@@ -71,6 +80,7 @@ export function toFile(path: string, bytes: Buffer): SpecFile {
     doc_type: docTypeFor(path),
     approx_tokens: approxTokens(text),
     content_hash: contentHash(bytes),
+    used_by_agents: usedByAgents,
   };
 }
 
@@ -78,4 +88,52 @@ export function toFile(path: string, bytes: Buffer): SpecFile {
 export function isMissingDirError(err: unknown): boolean {
   const code = (err as { code?: string } | null)?.code;
   return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
+/** What the attach helpers need from a document-list item. */
+export type DocListMap = Map<string, { size: number; approx_tokens: number }>;
+
+export function toDocListMap(documents: SpecFile[]): DocListMap {
+  return new Map(documents.map((d) => [d.path, { size: d.size ?? 0, approx_tokens: d.approx_tokens ?? 0 }] as const));
+}
+
+/**
+ * Resolve one attached path against the current document list. Missing (absent
+ * from the list; every path when there is no clone) beats too_large (size above
+ * CONTEXT_DOC_MAX_BYTES, tokens null); otherwise the document's approx_tokens.
+ */
+export function toAttachment(path: string, docs: DocListMap): ContextAttachment {
+  const doc = docs.get(path);
+  const doc_type = docTypeFor(path);
+  if (!doc) return { path, doc_type, approx_tokens: null, missing: true, too_large: false };
+  if (doc.size > CONTEXT_DOC_MAX_BYTES) {
+    return { path, doc_type, approx_tokens: null, missing: false, too_large: true };
+  }
+  return { path, doc_type, approx_tokens: doc.approx_tokens, missing: false, too_large: false };
+}
+
+/**
+ * Inherited attachments in input order, dropping any path already in `ownPaths`
+ * or already seen earlier in the inherited list (first occurrence wins).
+ */
+export function dedupeInherited(
+  ownPaths: string[],
+  inherited: { skillId: string; skillName: string; path: string }[],
+  docs: DocListMap,
+): InheritedContextAttachment[] {
+  const seen = new Set(ownPaths);
+  const out: InheritedContextAttachment[] = [];
+  for (const link of inherited) {
+    if (seen.has(link.path)) continue;
+    seen.add(link.path);
+    out.push({ ...toAttachment(link.path, docs), skill_id: link.skillId, skill_name: link.skillName });
+  }
+  return out;
+}
+
+/** PUT rule: every path must be in the document list or already attached; else 422. */
+export function assertAttachable(paths: string[], docs: DocListMap, alreadyAttached: string[]): void {
+  const attached = new Set(alreadyAttached);
+  const bad = paths.find((p) => !docs.has(p) && !attached.has(p));
+  if (bad !== undefined) throw new ValidationError(NOT_LISTED_MESSAGE);
 }

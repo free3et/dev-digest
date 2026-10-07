@@ -97,6 +97,12 @@ describe('FsContextDocStore', () => {
       expect(await realpath(abs!)).toBe(await realpath(join(root, 'docs/a.md')));
     });
 
+    it('size() returns the byte length without reading the content', async () => {
+      const store = new FsContextDocStore();
+      const abs = (await store.resolve(root, 'docs/a.md', ROOTS))!;
+      expect(await store.size(abs)).toBe((await store.read(abs)).length);
+    });
+
     it.each([
       ['not under a root', 'src/readme.md'],
       ['missing file', 'docs/missing.md'],

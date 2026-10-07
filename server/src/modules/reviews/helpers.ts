@@ -158,3 +158,22 @@ export function prIntentWriteToValues(prId: string, w: PrIntentWrite) {
     generatedAt: new Date(),
   };
 }
+
+/**
+ * Project Context (duplicated on purpose from project-context: `reviews` must
+ * not import another module's helpers). First occurrence wins over
+ * own-then-inherited paths.
+ */
+export function dedupeContextPaths(own: string[], inherited: string[]): string[] {
+  return [...new Set([...own, ...inherited])];
+}
+
+/** UTF-16 code units / 4, rounded up — same rule as reviewer-core's estimateTokens. */
+export function approxContextTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/** The one NFR-4 line per completed run; `, M skipped` only when M > 0. */
+export function formatProjectContextLog(docs: number, tokens: number, skipped: number): string {
+  return `project context: ${docs} docs, +~${tokens} tokens${skipped > 0 ? `, ${skipped} skipped` : ''}`;
+}

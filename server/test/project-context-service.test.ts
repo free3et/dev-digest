@@ -34,6 +34,15 @@ describe('ProjectContextService', () => {
       // Workspace scoping lives in the repository: another workspace sees nothing.
       getRepoForWorkspace: async (ws: string, id: string) =>
         ws === WS && id === 'repo-1' ? { id, clonePath } : undefined,
+      usedByAgentsByPath: async () => new Map([['docs/a.md', 2]]),
+      getAgentForWorkspace: async () => undefined,
+      agentDocs: async () => [],
+      inheritedDocs: async () => [],
+      replaceAgentDocs: async () => undefined,
+      getSkillForWorkspace: async () => undefined,
+      skillDocs: async () => [],
+      replaceSkillDocs: async () => undefined,
+      skillUsedByAgents: async () => [],
     };
     svc = new ProjectContextService(container, repo);
   });

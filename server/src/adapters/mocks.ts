@@ -360,7 +360,17 @@ export class MockContextDocStore implements ContextDocStore {
     return path in this.files ? path : null;
   }
 
+  /** Paths passed to `read`, so tests can pin that a file was never read. */
+  public reads: string[] = [];
+
+  async size(abs: string): Promise<number> {
+    const text = this.files[abs];
+    if (text === undefined) throw new Error(`ENOENT: ${abs}`);
+    return Buffer.byteLength(text);
+  }
+
   async read(abs: string): Promise<Buffer> {
+    this.reads.push(abs);
     const text = this.files[abs];
     if (text === undefined) throw new Error(`ENOENT: ${abs}`);
     return Buffer.from(text, 'utf8');

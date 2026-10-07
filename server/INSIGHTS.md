@@ -168,6 +168,16 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-07** — A line written with `runLog.info(...)` in
+  `src/modules/reviews/run-executor.ts` AFTER the trace object is built never
+  appears in the persisted trace, only on the SSE stream: the trace's `log` is
+  `runLog.logFor(runId)`, evaluated at construction. Emit run-level lines (e.g.
+  the `project context: N docs, +~T tokens` line) before that point. Related
+  test trap: `agent_runs.status = 'done'` is written BEFORE `run_traces` is
+  saved, so an it-test that reads `/runs/:id/trace` right after
+  `waitForPrRuns` can get `404 Run trace not found` — poll for the trace.
+  `test/project-context-run.it.test.ts`, `test/helpers/runs.ts`
+
 - **2026-10-01** — `GET /pulls/:id/blast` on a PR that was only polled, never
   opened, answers `0 changed symbols … degraded: true`: `pr_files` is filled by
   the PR-detail GET (`GET /pulls/:id`), not by the poll, so the route sees no

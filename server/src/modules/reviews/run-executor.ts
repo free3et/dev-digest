@@ -1,4 +1,5 @@
 import type { Container } from '../../platform/container.js';
+import { CONTEXT_DOC_MAX_BYTES } from '@devdigest/shared';
 import type { PrIntent, Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers, severityCounts } from '@devdigest/reviewer-core';
 import { RunLogger, type PinoLike } from '../../platform/run-logger.js';
@@ -6,7 +7,13 @@ import type * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
-import { taskLine, toSkillPromptBlock } from './helpers.js';
+import {
+  approxContextTokens,
+  dedupeContextPaths,
+  formatProjectContextLog,
+  taskLine,
+  toSkillPromptBlock,
+} from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { ensureIntent } from './intent-deriver.js';
 import { toPromptIntent } from './intent-helpers.js';
@@ -216,6 +223,10 @@ export class ReviewRunExecutor {
       // section when the array is empty.
       const skillBlocks = await this.buildSkillBlocks(agent.id, runLog);
 
+      // Project Context — attached repo docs (own, then via skills), read from the
+      // clone working tree now so local edits count. Best-effort: never fails the run.
+      const projectContext = await this.buildProjectContext(agent.id, repo, runLog);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -231,6 +242,8 @@ export class ReviewRunExecutor {
         // Linked skills, already rendered as `### name` blocks. Omitted entirely
         // when the agent has none.
         ...(skillBlocks.length > 0 ? { skills: skillBlocks } : {}),
+        // Project Context docs; omitted when none were injected (prompt unchanged).
+        ...(projectContext.specs.length > 0 ? { specs: projectContext.specs } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -313,6 +326,14 @@ export class ReviewRunExecutor {
         error: null,
       });
 
+      // NFR-4: exactly one line per completed run, also for 0 docs.
+      runLog.info(
+        formatProjectContextLog(
+          projectContext.specs.length,
+          projectContext.specs.reduce((n, d) => n + approxContextTokens(d.text), 0),
+          projectContext.missing.length,
+        ),
+      );
       const trace: RunTrace = {
         config: {
           agent: agent.name,
@@ -339,7 +360,9 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        specs_read: projectContext.specs.map((d) => d.path),
+        specs_tokens: projectContext.specs.map((d) => ({ path: d.path, approx_tokens: approxContextTokens(d.text) })),
+        specs_missing: projectContext.missing,
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
@@ -373,6 +396,65 @@ export class ReviewRunExecutor {
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /**
+   * Read the agent's attached Project Context documents for the PR's repo: own
+   * docs in attach order, then those inherited through skills with both switches
+   * on (same rule as enabledSkillsForPrompt), first occurrence of a path kept.
+   * A path that is not listed/safe (missing, symlink, outside the clone), has no
+   * clone, fails to read or exceeds CONTEXT_DOC_MAX_BYTES goes to `missing`.
+   * A failing link query injects nothing; the run goes on (AC-12, NFR-6).
+   */
+  private async buildProjectContext(
+    agentId: string,
+    repo: typeof schema.repos.$inferSelect,
+    runLog: RunLogger,
+  ): Promise<{ specs: { path: string; text: string }[]; missing: string[] }> {
+    const specs: { path: string; text: string }[] = [];
+    const missing: string[] = [];
+    let paths: string[];
+    try {
+      const links = this.container.contextDocLinksRepo;
+      const [own, inherited] = await Promise.all([
+        links.agentDocs(agentId, repo.id),
+        links.inheritedDocs(agentId, repo.id),
+      ]);
+      paths = dedupeContextPaths(
+        own,
+        inherited.map((l) => l.path),
+      );
+    } catch (err) {
+      runLog.error(`context docs: could not load links, running without project context — ${(err as Error).message}`);
+      return { specs, missing };
+    }
+    for (const path of paths) {
+      try {
+        if (!repo.clonePath) {
+          missing.push(path);
+          continue;
+        }
+        const abs = await this.container.contextDocs.resolve(repo.clonePath, path, this.container.config.contextRoots);
+        if (!abs) {
+          missing.push(path);
+          continue;
+        }
+        // Size first: an oversized file must not be pulled into memory (AC-12).
+        if ((await this.container.contextDocs.size(abs)) > CONTEXT_DOC_MAX_BYTES) {
+          missing.push(path);
+          continue;
+        }
+        const bytes = await this.container.contextDocs.read(abs);
+        if (bytes.length > CONTEXT_DOC_MAX_BYTES) {
+          missing.push(path);
+          continue;
+        }
+        specs.push({ path, text: bytes.toString('utf8') });
+      } catch {
+        missing.push(path);
+      }
+    }
+    return { specs, missing };
   }
 
   /**

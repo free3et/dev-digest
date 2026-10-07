@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import { ContextDocList, SpecFile } from '@devdigest/shared';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
@@ -270,6 +271,85 @@ d('project-context routes (Testcontainers pg)', () => {
       expect(put.statusCode).toBe(404);
     }
     expect(await onDisk('docs/a.md')).toBe('# A\n');
+  });
+
+  describe('AC-8: used_by_agents', () => {
+    let ws: string;
+    const mkAgent = async (name: string, enabled = true) => {
+      const [a] = await pg.handle.db
+        .insert(t.agents)
+        .values({ workspaceId: ws, name, provider: 'openai', model: 'm', systemPrompt: 'p', enabled })
+        .returning();
+      return a!.id;
+    };
+    const mkSkill = async (name: string, enabled = true) => {
+      const [k] = await pg.handle.db
+        .insert(t.skills)
+        .values({ workspaceId: ws, name, description: 'd', type: 'custom', source: 'manual', body: 'b', enabled })
+        .returning();
+      return k!.id;
+    };
+    const countOf = async (path: string) => {
+      const list = ContextDocList.parse((await getList()).json());
+      const fromList = list.documents.find((x) => x.path === path)!.used_by_agents;
+      const file = SpecFile.parse((await getFile(path)).json());
+      expect(file.used_by_agents).toBe(fromList);
+      return fromList;
+    };
+    const created: { agents: string[]; skills: string[] } = { agents: [], skills: [] };
+
+    beforeEach(async () => {
+      const [r] = await pg.handle.db.select().from(t.repos).where(eq(t.repos.id, repoId));
+      ws = r!.workspaceId;
+    });
+    afterEach(async () => {
+      for (const id of created.agents) await pg.handle.db.delete(t.agents).where(eq(t.agents.id, id));
+      for (const id of created.skills) await pg.handle.db.delete(t.skills).where(eq(t.skills.id, id));
+      created.agents = [];
+      created.skills = [];
+    });
+
+    it('is 0 with no attachments, on the list and on the file response', async () => {
+      expect(await countOf('docs/a.md')).toBe(0);
+    });
+
+    it('counts own attachments, via-skill attachments, and a disabled agent; not disabled links or skills', async () => {
+      const own = await mkAgent('own-agent');
+      const viaSkill = await mkAgent('via-skill-agent');
+      const disabledAgent = await mkAgent('disabled-agent', false);
+      const offLink = await mkAgent('off-link-agent');
+      const offSkillAgent = await mkAgent('off-skill-agent');
+      const skillOn = await mkSkill('ctx-on');
+      const skillOff = await mkSkill('ctx-off', false);
+      created.agents.push(own, viaSkill, disabledAgent, offLink, offSkillAgent);
+      created.skills.push(skillOn, skillOff);
+      const db = pg.handle.db;
+
+      await db.insert(t.agentContextDocs).values([
+        { agentId: own, repoId, path: 'docs/a.md' },
+        { agentId: disabledAgent, repoId, path: 'docs/a.md' },
+        // same agent via own AND skill counts once
+        { agentId: viaSkill, repoId, path: 'docs/a.md' },
+        // attached for another repo: ignored
+        { agentId: own, repoId: noCloneRepoId, path: 'specs/b.md' },
+      ]);
+      await db.insert(t.skillContextDocs).values([
+        { skillId: skillOn, repoId, path: 'docs/a.md' },
+        { skillId: skillOn, repoId, path: 'specs/b.md' },
+        { skillId: skillOff, repoId, path: 'specs/b.md' },
+      ]);
+      await db.insert(t.agentSkills).values([
+        { agentId: viaSkill, skillId: skillOn, enabled: true },
+        { agentId: offLink, skillId: skillOn, enabled: false },
+        { agentId: offSkillAgent, skillId: skillOff, enabled: true },
+      ]);
+
+      // own + disabled agent + viaSkill (own and via skill, once) = 3
+      expect(await countOf('docs/a.md')).toBe(3);
+      // only viaSkill through the enabled skill and enabled link
+      expect(await countOf('specs/b.md')).toBe(1);
+      expect(await countOf('docs/specs/c.md')).toBe(0);
+    });
   });
 
   describe('NFR-4: observability', () => {

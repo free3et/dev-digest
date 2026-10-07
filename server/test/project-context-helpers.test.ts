@@ -8,6 +8,8 @@ import {
   approxTokens,
   isCandidatePath,
   parseContextRoots,
+  toFile,
+  toListItem,
 } from '../src/modules/project-context/helpers.js';
 
 const ALL = ['specs', 'docs', 'insights'];
@@ -109,5 +111,13 @@ describe('parseContextRoots', () => {
     expect(() => parseContextRoots('**/docs/**')).toThrow();
     expect(() => parseContextRoots('')).toThrow();
     expect(() => parseContextRoots(' , ')).toThrow();
+  });
+});
+
+describe('used_by_agents mapping', () => {
+  it('toListItem and toFile carry the count they are given', () => {
+    const item = toListItem({ path: 'docs/a.md', size: 4, mtime: 0, text: 'abcd' } as never, 3);
+    expect(item.used_by_agents).toBe(3);
+    expect(toFile('docs/a.md', Buffer.from('abcd'), 0).used_by_agents).toBe(0);
   });
 });

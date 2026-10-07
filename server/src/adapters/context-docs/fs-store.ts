@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { lstat, readdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, readdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
 import type { ContextDocEntry, ContextDocStore } from '@devdigest/shared';
 import { EXCLUDED_SEGMENTS, isCandidatePath } from './rules.js';
@@ -69,6 +69,10 @@ export class FsContextDocStore implements ContextDocStore {
     } catch {
       return null;
     }
+  }
+
+  async size(abs: string): Promise<number> {
+    return (await stat(abs)).size;
   }
 
   read(abs: string): Promise<Buffer> {

@@ -19,6 +19,8 @@ import {
   PrDetail,
   ContextDocWrite,
   CONTEXT_DOC_MAX_BYTES,
+  ContextDocsUpdate,
+  ContextAttachment,
 } from '@devdigest/shared';
 
 /**
@@ -256,5 +258,34 @@ describe('ContextDocWrite byte cap', () => {
     // 3 bytes each: 87_382 * 3 = 262_146 > cap, 87_381 * 3 = 262_143 fits
     expect(w('\u20ac'.repeat(87_382)).success).toBe(false);
     expect(w('\u20ac'.repeat(87_381)).success).toBe(true);
+  });
+});
+
+describe('project context attach contracts', () => {
+  const repo_id = '11111111-1111-4111-8111-111111111111';
+  it('ContextDocsUpdate rejects duplicate paths', () => {
+    expect(ContextDocsUpdate.safeParse({ repo_id, paths: ['docs/a.md', 'docs/a.md'] }).success).toBe(false);
+    expect(ContextDocsUpdate.safeParse({ repo_id, paths: ['docs/a.md', 'docs/b.md'] }).success).toBe(true);
+  });
+  it('ContextAttachment invariants: too_large only when not missing, tokens null when flagged', () => {
+    const base = { path: 'docs/a.md', doc_type: 'docs' as const };
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: null, missing: true, too_large: true }).success).toBe(false);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: 5, missing: false, too_large: true }).success).toBe(false);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: null, missing: false, too_large: true }).success).toBe(true);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: 5, missing: false, too_large: false }).success).toBe(true);
+  });
+  it('RunTrace without specs_tokens / specs_missing still parses (EC-5)', () => {
+    const trace = RunTrace.parse({
+      config: { agent: 'a', version: 'v1', model: 'm', pr: 1, source: 'local' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: 0, findings: 0, grounding: '0/0 passed' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '{}',
+      memory_pulled: [],
+      specs_read: [],
+      log: [],
+    });
+    expect(trace.specs_tokens).toBeUndefined();
+    expect(trace.specs_missing).toBeUndefined();
   });
 });

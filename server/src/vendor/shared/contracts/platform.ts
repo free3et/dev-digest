@@ -266,6 +266,8 @@ export const SpecFile = z.object({
   doc_type: ContextDocType,
   approx_tokens: z.number().int().min(0),
   content_hash: z.string().nullish(),
+  /** Agents whose next run on this repo would include the document (own or via a skill; disabled agents count). */
+  used_by_agents: z.number().int().min(0),
 });
 export type SpecFile = z.infer<typeof SpecFile>;
 
@@ -289,6 +291,57 @@ export type ContextDocWrite = z.infer<typeof ContextDocWrite>;
 
 export const ContextFileQuery = z.object({ path: z.string().min(1) });
 export type ContextFileQuery = z.infer<typeof ContextFileQuery>;
+
+// ---- Project Context attachments (agents / skills) ----
+export const ContextAttachment = z
+  .object({
+    path: z.string(),
+    doc_type: ContextDocType,
+    approx_tokens: z.number().int().min(0).nullable(),
+    /** True = the path is not in the repo's current document list. */
+    missing: z.boolean(),
+    /** True = the document exists but exceeds CONTEXT_DOC_MAX_BYTES; always false when `missing`. */
+    too_large: z.boolean(),
+  })
+  .refine((a) => !(a.missing && a.too_large), {
+    message: 'too_large must be false when missing',
+    path: ['too_large'],
+  })
+  .refine((a) => (a.missing || a.too_large ? a.approx_tokens === null : true), {
+    message: 'approx_tokens must be null when missing or too_large',
+    path: ['approx_tokens'],
+  });
+export type ContextAttachment = z.infer<typeof ContextAttachment>;
+
+export const InheritedContextAttachment = ContextAttachment.and(
+  z.object({ skill_id: z.string(), skill_name: z.string() }),
+);
+export type InheritedContextAttachment = z.infer<typeof InheritedContextAttachment>;
+
+export const AgentContextDocs = z.object({
+  repo_id: z.string(),
+  own: z.array(ContextAttachment),
+  inherited: z.array(InheritedContextAttachment),
+});
+export type AgentContextDocs = z.infer<typeof AgentContextDocs>;
+
+export const SkillContextDocs = z.object({
+  repo_id: z.string(),
+  docs: z.array(ContextAttachment),
+  used_by_agents: z.number().int().min(0),
+});
+export type SkillContextDocs = z.infer<typeof SkillContextDocs>;
+
+export const ContextDocsUpdate = z.object({
+  repo_id: z.string().uuid(),
+  paths: z
+    .array(z.string().min(1))
+    .refine((p) => new Set(p).size === p.length, { message: 'paths must be unique' }),
+});
+export type ContextDocsUpdate = z.infer<typeof ContextDocsUpdate>;
+
+export const ContextDocsQuery = z.object({ repo_id: z.string().uuid() });
+export type ContextDocsQuery = z.infer<typeof ContextDocsQuery>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

@@ -313,6 +313,8 @@ export interface ContextDocStore {
   list(root: string, roots: string[]): Promise<ContextDocEntry[]>;
   /** Absolute path if `path` is a safe, listed document inside `root`, else null. */
   resolve(root: string, path: string, roots: string[]): Promise<string | null>;
+  /** Size in bytes of a path returned by `resolve`, without reading the content. */
+  size(abs: string): Promise<number>;
   read(abs: string): Promise<Buffer>;
   /** Replace the file atomically (temp file in the same folder, then rename). */
   writeAtomic(abs: string, content: string): Promise<void>;
