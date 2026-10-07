@@ -20,6 +20,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Doesn't Work
 
+- **2026-10-07** — "Exactly one model call" is NOT guaranteed by calling
+  `completeStructured` once: the real adapters default `maxRetries` to 2 and
+  reprompt on a schema failure (up to 3 billed calls), while `MockLLMProvider`
+  never loops, so a "1 call" assertion passes in tests and fails in production.
+  Pass `{ maxRetries: 0, maxTokens, timeoutMs }` and assert those fields on the
+  captured request, not just the call count. `src/adapters/llm/openai.ts:90-129`,
+  `src/modules/brief/service.ts`, `test/brief-service.test.ts`.
+
 - **2026-09-18** — The PR list's cost column was built as "latest completed run's cost", not "sum of every completed run's cost", and the wrong semantics was documented as deliberate in the contract comment (`// USD cost of the LATEST COMPLETED run… Deliberately not a sum across runs`) — a reviewer reading the comment alone would conclude the behavior was intentional and correct. The underlying query (`doneRunCostsForPulls`) already returns every `done` run per PR; only the grouping function picked the first one. Fixed by replacing `pickLatestCostByPr` with `sumCostByPr` (skips `costUsd: null` runs rather than zeroing the sum) and correcting the contract comment in both `server/src/vendor/shared/contracts/platform.ts` and its client hand-copy. When a list column is described as "the latest X" or "not a sum", check the actual product requirement before trusting the comment — it can describe what was built, not what was asked for. Evidence: `server/src/modules/pulls/helpers.ts:83-98`.
 
 - **2026-07-29** — A green `pnpm test` does not mean the integration tests ran: `*.it.test.ts` files self-skip when no Docker daemon is reachable, so a machine without Docker reports success having exercised none of the DB paths. Evidence: `server/test/helpers/pg.ts:10`.
@@ -167,6 +175,15 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-07-29** — `pnpm db:migrate` dumps raw Postgres NOTICE objects (`'extension "vector" already exists, skipping'`, code 42710) that read like errors but are idempotent skips — the run is fine iff it ends with `✓ migrations applied`. Evidence: `src/db/migrate.ts` sets no `onnotice` handler, so the `postgres` client logs every notice to stderr.
 
 ## Recurring Errors & Fixes
+
+- **2026-10-07** — A per-route `config.rateLimit` is inert in tests:
+  `@fastify/rate-limit` is registered only when `config.nodeEnv !== 'test'`
+  (`src/app.ts:102-104`), so a "6th POST returns 429" case never passes under
+  `appWith`. Build that one app with `nodeEnv: 'development'`. Related: a handler
+  that rethrows `AppError` turns a missing provider key into a 500, because
+  `ConfigError` extends `AppError` with status 500; a feature that must answer
+  409 has to map non-feature errors itself (`src/modules/brief/service.ts`).
+  `test/brief.it.test.ts`.
 
 - **2026-10-07** — A line written with `runLog.info(...)` in
   `src/modules/reviews/run-executor.ts` AFTER the trace object is built never

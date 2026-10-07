@@ -101,6 +101,14 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-10-07** — A deep-link prop such as `focusFile` must reach every
+  collapsed ancestor, not just the leaf: `SmartDiffGroup` does not render its
+  `DiffViewer` while closed (docs and boilerplate groups start closed), so the
+  group's initial `open` has to derive from `focusFile` or `FileCard` never
+  mounts. jsdom has no `Element.prototype.scrollIntoView`; call it as
+  `el?.scrollIntoView?.()` and stub it in tests. `DiffTab/SmartDiffGroup`,
+  `diff-viewer/FileCard/FileCard.tsx:57-66`.
+
 - **2026-10-01** — A new `messages/en/*.json` namespace is auto-loaded by the
   app (`i18n/request.ts` reads the folder) but NOT by tests:
   `renderWithProviders` only registers the namespaces listed in
