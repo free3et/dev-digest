@@ -141,6 +141,7 @@ describe('BriefService.generate', () => {
     // NFR-6: one line, no PR text.
     expect(info).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(info.mock.calls[0])).not.toContain(SECRET_TITLE);
+    expect(info.mock.calls[0]![0]).toMatchObject({ tokens_out: 5, input_tokens: expect.any(Number) });
   });
 
   it('marks intent and blast missing and stores them as null when neither is available', async () => {

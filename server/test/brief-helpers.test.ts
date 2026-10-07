@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { BlastRadius, BriefModelOutput } from '@devdigest/shared';
 import {
   buildBriefMessages,
+  callerRankKey,
   classifyFile,
   computeMissingInputs,
   computeTotals,
@@ -318,6 +319,48 @@ describe('fitBudget blast caller cut order (AC-6 step 4)', () => {
       Array.from({ length: b!.callers.length }, (_, i) => `Bc${i}`),
     );
     expect(r.tokens).toBeLessThanOrEqual(full - 40);
+  });
+
+  it('cuts the globally lowest-ranked caller first across symbol groups', () => {
+    // Global rank (best first) interleaves groups: X0, Y0, X1, Y1, ...; group Y is last in
+    // `downstream`, but the worst callers are the high-numbered ones of BOTH groups.
+    const mk = (symbol: string) => ({
+      symbol,
+      callers: Array.from({ length: 10 }, (_, i) => ({ name: `${symbol}${i}`, file: `src/${symbol}${i}.ts`, line: i + 1 })),
+      endpoints_affected: [],
+      crons_affected: [],
+    });
+    const blast: BlastRadius = {
+      changed_symbols: [{ name: 'X', file: 'src/x.ts', kind: 'function' }],
+      downstream: [mk('X'), mk('Y')],
+      summary: 's',
+    };
+    const order: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      for (const g of ['X', 'Y']) order.push(callerRankKey(g, `src/${g}${i}.ts`, `${g}${i}`));
+    }
+    // Rank 19 = Y9 (worst), 18 = X9, 17 = Y8, 16 = X8.
+    const facts = baseFacts({ blast, description: null });
+    const full = estimateInputTokens(buildBriefMessages(facts));
+    const cutOne = estimateInputTokens(
+      buildBriefMessages({ ...facts, blast: { ...blast, downstream: [mk('X'), { ...mk('Y'), callers: mk('Y').callers.slice(0, 9) }] } }),
+    );
+    // Budget that forces exactly the cut of the worst two callers.
+    const r = fitBudget(facts, cutOne - 1, order);
+    const names = r.facts.blast!.downstream.map((d) => d.callers.map((c) => c.name));
+    expect(r.truncated).toEqual(['blast_callers']);
+    expect(full).toBeGreaterThan(cutOne);
+    // X9 (rank 18) went before Y8 (rank 17) was even considered: X lost its tail too.
+    expect(names[0]).not.toContain('X9');
+    expect(names[1]).not.toContain('Y9');
+    // The survivors are exactly the best-ranked prefix of the global order.
+    const kept = new Set(names.flat());
+    const removed = [...order].reverse().slice(0, 20 - kept.size);
+    for (const k of removed) expect(kept.has(k.split('\u0000')[2]!)).toBe(false);
+    expect(kept.size).toBeLessThan(20);
+    // Highest-ranked callers survive in both groups.
+    expect(names[0]).toContain('X0');
+    expect(names[1]).toContain('Y0');
   });
 });
 

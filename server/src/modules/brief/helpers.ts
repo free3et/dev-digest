@@ -277,6 +277,11 @@ export function toBlastRadius(result: BlastResultInput): BlastRadius {
   };
 }
 
+/** Identity of a caller row inside its symbol group, for the global budget-cut order. */
+export function callerRankKey(viaSymbol: string, file: string, name: string): string {
+  return `${viaSymbol}\u0000${file}\u0000${name}`;
+}
+
 /** Blast counts as missing only when degraded with no changed symbols (C-5). */
 export function isBlastMissing(result: Pick<BlastResultInput, 'degraded' | 'changedSymbols'>): boolean {
   return result.degraded === true && result.changedSymbols.length === 0;
@@ -403,7 +408,11 @@ function fileCutOrder(files: BriefFileFact[]): string[] {
  * (5) file stats. If the never-cut core still exceeds the budget, the intent
  * text is shortened (AC-26) and the call is still made. Returns a copy.
  */
-export function fitBudget(input: BriefFacts, budget: number = INPUT_TOKEN_BUDGET): FittedBrief {
+export function fitBudget(
+  input: BriefFacts,
+  budget: number = INPUT_TOKEN_BUDGET,
+  callerOrder: readonly string[] = [],
+): FittedBrief {
   const facts = structuredClone(input);
   const truncated: BriefTruncatedInput[] = [];
   const mark = (t: BriefTruncatedInput) => {
@@ -438,12 +447,28 @@ export function fitBudget(input: BriefFacts, budget: number = INPUT_TOKEN_BUDGET
     recount();
   }
 
-  // (4) Blast callers, lowest-ranked first (callers arrive best-ranked first).
+  // (4) Blast callers, globally lowest-ranked first. `callerOrder` lists
+  // `callerRankKey`s best-first across ALL symbol groups; callers it does not
+  // know rank below every listed one, later in group order = lower.
   if (facts.blast) {
+    const rank = new Map(callerOrder.map((k, i) => [k, i] as const));
     while (over()) {
-      const d = [...facts.blast.downstream].reverse().find((x) => x.callers.length > 0);
-      if (!d) break;
-      d.callers.pop();
+      let worst: { d: DownstreamImpact; i: number } | null = null;
+      let worstRank = -1;
+      let seq = 0;
+      for (const d of facts.blast.downstream) {
+        d.callers.forEach((c, i) => {
+          const r = rank.get(callerRankKey(d.symbol, c.file, c.name)) ?? callerOrder.length + seq;
+          seq++;
+          if (r >= worstRank) {
+            worstRank = r;
+            worst = { d, i };
+          }
+        });
+      }
+      const w = worst as { d: DownstreamImpact; i: number } | null;
+      if (!w) break;
+      w.d.callers.splice(w.i, 1);
       mark('blast_callers');
       recount();
     }

@@ -25,6 +25,7 @@ import {
   computeTotals,
   extractIssueRefs,
   findingLinesByPath,
+  callerRankKey,
   fitBudget,
   groundBrief,
   isBlastMissing,
@@ -56,6 +57,7 @@ export interface BriefOptions {
 /** AC-25: PRs with a generation in progress in this process (C-28). Released in `finally`. */
 const inFlight = new Set<string>();
 
+// duplicated from server/src/modules/reviews/intent-deriver.ts (platform/resilience.ts has no `what` label)
 class TimeoutError extends Error {
   constructor(what: string, ms: number) {
     super(`${what} timed out after ${ms}ms`);
@@ -63,6 +65,7 @@ class TimeoutError extends Error {
   }
 }
 
+// duplicated from server/src/modules/reviews/intent-deriver.ts (platform/resilience.ts has no `what` label)
 async function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   try {
@@ -183,6 +186,7 @@ export class BriefService {
     // ---- blast radius ----------------------------------------------------
     let blast: BlastRadius | null = null;
     let blastMissing = true;
+    let callerOrder: string[] = [];
     try {
       const result = (await container.repoIntel.getBlastRadius(
         scope.repoId,
@@ -192,6 +196,7 @@ export class BriefService {
       if (!blastMissing) {
         // Callers best-ranked first (stable): the budget cut removes from the end.
         const callers = result.callers.map((c, i) => ({ c, i })).sort((a, b) => b.c.rank - a.c.rank || a.i - b.i).map((x) => x.c);
+        callerOrder = callers.map((c) => callerRankKey(c.viaSymbol, c.file, c.symbol));
         blast = toBlastRadius({ ...result, callers });
       }
     } catch {
@@ -222,7 +227,7 @@ export class BriefService {
       linkedIssue,
       contextDocs: docs,
     };
-    const fitted = fitBudget(facts);
+    const fitted = fitBudget(facts, undefined, callerOrder);
     const messages = buildBriefMessages(fitted.facts);
 
     // ---- the one LLM call ------------------------------------------------
@@ -280,6 +285,7 @@ export class BriefService {
         model: `${choice.provider}/${res.model}`,
         cost_usd: res.costUsd,
         input_tokens: fitted.tokens,
+        tokens_out: res.tokensOut,
         risks: brief.risks.risks.length,
         review_focus: brief.review_focus.length,
         missing_inputs: brief.missing_inputs,
