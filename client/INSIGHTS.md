@@ -180,6 +180,15 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-10-07** — Clicking a new editor tab does nothing: the tab shows in
+  the bar but the content stays on Config, because `?tab=` is validated by a
+  hand-written list in the PAGE (`agents/[id]/page.tsx` had
+  `VALID_TABS = ["config", "skills"]`) and an unknown value silently falls back
+  to `config`. Component tests of `AgentEditor` pass because they bypass the
+  page. Derive the allowed values from `TABS` (`parseAgentTab`, like
+  `parseSkillTab`) and test the parser against every `TABS` key.
+  `agents/[id]/_components/AgentEditor/helpers.test.ts`
+
 - **2026-10-07** — Every row you click keeps a white outline ("selections pile
   up"): a row style sets `border: "1px solid transparent"` and the active
   variant overrides only `borderColor`. When the row stops being active React
