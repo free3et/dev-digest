@@ -7,6 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
+import { AgentContextTab } from "./_components/AgentContextTab";
 import { AgentSkillsTab } from "./_components/AgentSkillsTab";
 import { ConfigTab } from "./_components/ConfigTab";
 import { TABS } from "./constants";
@@ -21,7 +22,13 @@ export function AgentEditor({ agent, tab, onTab }: { agent: Agent; tab: string; 
         <Tabs tabs={tabs} value={tab} onChange={onTab} pad="0 24px" />
       </div>
       <div style={s.body}>
-        {tab === "skills" ? <AgentSkillsTab agentId={agent.id} /> : <ConfigTab agent={agent} />}
+        {tab === "skills" ? (
+          <AgentSkillsTab agentId={agent.id} />
+        ) : tab === "context" ? (
+          <AgentContextTab agentId={agent.id} />
+        ) : (
+          <ConfigTab agent={agent} />
+        )}
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ afterEach(() => {
 const PATH = "docs/a.md";
 const FILE_URL = `GET /repos/r1/context/file?path=${encodeURIComponent(PATH)}`;
 
-const file = (content: string, content_hash = "h1"): SpecFile => ({
+const file = (content: string, content_hash = "h1", used_by_agents = 0): SpecFile => ({
   path: PATH,
   content,
   size: content.length,
@@ -21,6 +21,7 @@ const file = (content: string, content_hash = "h1"): SpecFile => ({
   doc_type: "docs",
   approx_tokens: Math.ceil(content.length / 4),
   content_hash,
+  used_by_agents,
 });
 
 describe("DocPanel preview", () => {
@@ -139,5 +140,17 @@ describe("DocPanel edit mode", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByLabelText("Document content")).not.toBeInTheDocument();
     expect(gets).toBe(2);
+  });
+});
+
+describe("DocPanel used by", () => {
+  it.each([
+    [0, "Used by 0 agents"],
+    [1, "Used by 1 agent"],
+    [3, "Used by 3 agents"],
+  ])("shows the used_by_agents count %i", async (n, text) => {
+    mockFetch({ [FILE_URL]: file("# T", "h1", n) });
+    renderWithProviders(<DocPanel repoId="r1" path={PATH} />);
+    expect(await screen.findByText(text)).toBeInTheDocument();
   });
 });

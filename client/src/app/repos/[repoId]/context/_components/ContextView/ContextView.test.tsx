@@ -19,6 +19,7 @@ const doc = (path: string, doc_type: SpecFile["doc_type"], approx_tokens: number
   doc_type,
   approx_tokens,
   content_hash: null,
+  used_by_agents: 0,
 });
 
 const LIST: ContextDocList = {

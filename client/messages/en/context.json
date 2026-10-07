@@ -40,7 +40,8 @@
     "preview": "Preview",
     "edit": "Edit",
     "loading": "Loading document…",
-    "loadError": "Couldn’t load document"
+    "loadError": "Couldn’t load document",
+    "usedBy": "{count, plural, =0 {Used by 0 agents} one {Used by # agent} other {Used by # agents}}"
   },
   "editor": {
     "banner": "Local edit only — not committed. A repository resync overwrites it.",
@@ -52,5 +53,32 @@
     "conflict": "This file changed on disk since you loaded it. Reload to get the latest content.",
     "reload": "Reload",
     "saveError": "Couldn’t save document"
+  },
+  "picker": {
+    "filterLabel": "Filter documents",
+    "filterPlaceholder": "Filter documents…",
+    "attachedCount": "{attached} of {total} attached",
+    "listLabel": "Documents",
+    "tokens": "≈ {count} tok",
+    "tooLarge": "Skipped — over 256 KB",
+    "missing": "missing",
+    "viaSkill": "via skill {name}",
+    "noMatch": "No documents match.",
+    "empty": "This repository has no documents yet.",
+    "detach": "Detach",
+    "detachLabel": "Detach {path}",
+    "preview": "Preview {path}",
+    "dragHandle": "Drag to reorder {path}",
+    "moveUp": "Move {path} up",
+    "moveDown": "Move {path} down",
+    "previewLoading": "Loading document…",
+    "previewError": "Couldn’t load document",
+    "previewClose": "Close",
+    "serializesAs": "Serializes as",
+    "type": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    }
   }
 }

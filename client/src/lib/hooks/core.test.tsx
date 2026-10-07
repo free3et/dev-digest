@@ -19,6 +19,7 @@ const FILE: SpecFile = {
   doc_type: "docs",
   approx_tokens: 1,
   content_hash: "h1",
+  used_by_agents: 0,
 };
 const LIST: ContextDocList = { documents: [{ ...FILE, content: null }], refreshed_at: "2026-10-05T10:00:00Z", cloned: true };
 

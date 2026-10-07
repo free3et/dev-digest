@@ -1,13 +1,11 @@
 "use client";
 
 import React from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useTranslations } from "next-intl";
 import { ErrorState, Skeleton } from "@devdigest/ui";
 import { useContextFile, useSaveContextFile } from "@/lib/hooks/core";
+import { MarkdownDoc } from "@/components/markdown-doc/MarkdownDoc";
 import { isConflict, isDirty } from "./helpers";
-import { MD_COMPONENTS } from "./constants";
 import { s } from "./styles";
 
 type Mode = "preview" | "edit";
@@ -91,9 +89,7 @@ export function DocPanel({ repoId, path }: { repoId: string; path: string }) {
   } else if (file.data && mode === "preview") {
     body = (
       <div style={s.content}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-          {file.data.content ?? ""}
-        </ReactMarkdown>
+        <MarkdownDoc>{file.data.content ?? ""}</MarkdownDoc>
       </div>
     );
   }
@@ -118,6 +114,9 @@ export function DocPanel({ repoId, path }: { repoId: string; path: string }) {
           ))}
         </div>
       </div>
+      {file.data && (
+        <div style={s.usedBy}>{t("panel.usedBy", { count: file.data.used_by_agents })}</div>
+      )}
       {body}
     </section>
   );

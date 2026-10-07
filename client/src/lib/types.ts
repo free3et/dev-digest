@@ -30,6 +30,11 @@ export type {
   SpecFile,
   ContextDocList,
   ContextDocWrite,
+  ContextAttachment,
+  InheritedContextAttachment,
+  AgentContextDocs,
+  SkillContextDocs,
+  ContextDocsUpdate,
   IndexStatus,
 } from "@devdigest/shared";
 
