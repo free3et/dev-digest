@@ -23,6 +23,8 @@ interface DiffTabProps {
   reviews: ReviewRecord[];
   repoFullName?: string | null;
   headSha?: string | null;
+  /** `?file=` from the URL: opened and scrolled to (both orders). */
+  focusFile?: string | null;
 }
 
 const NO_PATHS: ReadonlySet<string> = new Set();
@@ -35,6 +37,7 @@ export function DiffTab({
   reviews,
   repoFullName,
   headSha,
+  focusFile,
 }: DiffTabProps) {
   const t = useTranslations("prReview.smartDiff");
   const files = React.useMemo(() => uniqueByPath(rawFiles), [rawFiles]);
@@ -78,6 +81,7 @@ export function DiffTab({
 
   const showSmart = order === "smart" && !!groups;
   const totals = diffTotals(files);
+  const focusMissing = !!focusFile && !files.some((f) => f.path === focusFile);
 
   // Shown whenever there's something for it to hide — GitHub comments or
   // findings — so it isn't only reachable when someone has also commented.
@@ -119,6 +123,11 @@ export function DiffTab({
           `Files changed · ${filesCount} files`
         )}
       </SectionLabel>
+      {focusMissing && (
+        <p role="status" style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-muted)" }}>
+          {t("notInDiff", { path: focusFile })}
+        </p>
+      )}
       {showSmart ? (
         orderFilesByGroups(groups, files).map((g) => (
           <SmartDiffGroup
@@ -128,10 +137,11 @@ export function DiffTab({
             flaggedCount={g.flaggedCount}
             findings={findingApi}
             commenting={commenting}
+            focusFile={focusFile}
           />
         ))
       ) : (
-        <DiffViewer files={files} findings={findingApi} commenting={commenting} />
+        <DiffViewer files={files} findings={findingApi} commenting={commenting} focusFile={focusFile} />
       )}
     </section>
   );

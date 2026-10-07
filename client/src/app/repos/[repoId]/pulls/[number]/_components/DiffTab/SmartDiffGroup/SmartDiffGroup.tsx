@@ -14,12 +14,18 @@ interface SmartDiffGroupProps {
   flaggedCount: number;
   findings: DiffFindingApi;
   commenting: DiffCommentApi;
+  /** Path to open; its containing group starts (and stays) open. */
+  focusFile?: string | null;
 }
 
 /** One role's collapsible slice of the diff; docs/boilerplate start collapsed. */
-export function SmartDiffGroup({ role, files, flaggedCount, findings, commenting }: SmartDiffGroupProps) {
+export function SmartDiffGroup({ role, files, flaggedCount, findings, commenting, focusFile }: SmartDiffGroupProps) {
   const t = useTranslations("prReview.smartDiff");
-  const [open, setOpen] = React.useState(!DEFAULT_COLLAPSED_ROLES.includes(role));
+  const hasFocus = !!focusFile && files.some((f) => f.path === focusFile);
+  const [open, setOpen] = React.useState(hasFocus || !DEFAULT_COLLAPSED_ROLES.includes(role));
+  React.useEffect(() => {
+    if (hasFocus) setOpen(true);
+  }, [hasFocus, focusFile]);
   const meta = ROLE_META[role];
   const Chevron = open ? Icon.ChevronDown : Icon.ChevronRight;
 
@@ -40,7 +46,7 @@ export function SmartDiffGroup({ role, files, flaggedCount, findings, commenting
       </button>
       {open && (
         <div style={s.body}>
-          <DiffViewer files={files} findings={findings} commenting={commenting} />
+          <DiffViewer files={files} findings={findings} commenting={commenting} focusFile={focusFile} />
         </div>
       )}
     </div>
