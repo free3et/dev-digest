@@ -17,6 +17,15 @@ export const MD_COMPONENTS: Components = {
     </code>
   ),
   pre: ({ children }) => <pre style={md.pre}>{children}</pre>,
+  table: ({ children }) => (
+    <div style={md.tableWrap}>
+      <table style={md.table}>{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead style={md.thead}>{children}</thead>,
+  // A column alignment set in the markdown (`:---:`) arrives as `style.textAlign`; honour it.
+  th: ({ children, style }) => <th style={{ ...md.th, textAlign: style?.textAlign ?? md.th.textAlign }}>{children}</th>,
+  td: ({ children, style }) => <td style={{ ...md.td, textAlign: style?.textAlign ?? md.td.textAlign }}>{children}</td>,
   a: ({ children, href }) => (
     <a href={href} rel="noopener noreferrer nofollow" target="_blank" style={md.a}>
       {children}

@@ -19,9 +19,12 @@ export const s = {
     cursor: "pointer",
     font: "inherit",
   } satisfies CSSProperties,
+  // Override with the `border` shorthand, not `borderColor`: React clears a longhand it no longer
+  // sets, which resets the colour to `currentColor` (white) and leaves a stale outline on every
+  // row that was once selected.
   rowActive: {
     background: "var(--accent-bg)",
-    borderColor: "var(--accent)",
+    border: "1px solid var(--accent)",
   } satisfies CSSProperties,
   icon: { gridRow: "1 / span 2", color: "var(--text-muted)" } satisfies CSSProperties,
   iconActive: { color: "var(--accent-text)" } satisfies CSSProperties,

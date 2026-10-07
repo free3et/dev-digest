@@ -37,7 +37,7 @@ export const s = {
   toggleBtnOn: {
     background: "var(--bg-hover)",
     color: "var(--text-primary)",
-    borderColor: "var(--border-strong)",
+    border: "1px solid var(--border-strong)",
   } satisfies CSSProperties,
   editor: { padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
   banner: {

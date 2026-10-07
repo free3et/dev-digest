@@ -112,4 +112,18 @@ describe("ContextView list", () => {
     fireEvent.click(await screen.findByRole("button", { name: /auth\.md/ }));
     expect(await screen.findByRole("heading", { name: "Auth spec" })).toBeInTheDocument();
   });
+
+  it("a row that stops being selected gets its transparent border back (no stale outline)", async () => {
+    mockFetch({ "GET /repos/r1/context": LIST });
+    renderWithProviders(<ContextView repoId="r1" />);
+    const first = await screen.findByRole("button", { name: /overview\.md/ });
+    const second = screen.getByRole("button", { name: /auth\.md/ });
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-current", "true");
+    fireEvent.click(second);
+    expect(second).toHaveAttribute("aria-current", "true");
+    expect(first).not.toHaveAttribute("aria-current");
+    // Clearing a `borderColor` longhand would leave `currentColor` (white) behind.
+    expect(first.style.borderColor).toBe("transparent");
+  });
 });

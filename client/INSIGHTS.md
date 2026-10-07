@@ -180,6 +180,15 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-10-07** — Every row you click keeps a white outline ("selections pile
+  up"): a row style sets `border: "1px solid transparent"` and the active
+  variant overrides only `borderColor`. When the row stops being active React
+  clears the `borderColor` longhand it no longer sets, and the colour falls
+  back to `currentColor` (the white text colour). Override with the `border`
+  SHORTHAND in the active variant too. Hit in `DocList` and the `DocPanel`
+  Preview/Edit toggle; `SkillCard/styles.ts` already carries the same warning.
+  `ContextView.test.tsx` ("no stale outline") fails on the longhand version.
+
 - **2026-10-01** — Running `pnpm build` while `next dev` is up overwrites the
   shared `client/.next`, and the dev server then answers every page with 500:
   `Cannot find module './vendor-chunks/@formatjs+icu-messageformat-parser@…js'`
