@@ -21,6 +21,9 @@ import {
   CONTEXT_DOC_MAX_BYTES,
   ContextDocsUpdate,
   ContextAttachment,
+  PrBrief,
+  PrBriefResponse,
+  BriefModelOutput,
 } from '@devdigest/shared';
 
 /**
@@ -287,5 +290,43 @@ describe('project context attach contracts', () => {
     });
     expect(trace.specs_tokens).toBeUndefined();
     expect(trace.specs_missing).toBeUndefined();
+  });
+});
+
+describe('PrBrief contracts', () => {
+  const brief = {
+    summary: 'Adds X.',
+    risks: { risks: [{ kind: 'security', title: 't', explanation: 'e', severity: 'high', file_refs: ['a.ts'] }] },
+    review_focus: [{ file: 'a.ts', line: 3, reason: 'r' }, { file: 'b.ts', line: null, reason: 'r2' }],
+    intent: { intent: 'i', in_scope: [], out_of_scope: [] },
+    blast: { changed_symbols: [], downstream: [], summary: 's' },
+    head_sha: 'abc',
+    generated_at: '2026-10-07T00:00:00.000Z',
+    model: 'gpt-x',
+    cost_usd: 0.01,
+    missing_inputs: ['smart_diff'],
+    intent_stale: false,
+    truncated_inputs: ['intent', 'blast_callers'],
+  };
+  it('parses a full brief and one with null intent/blast/cost', () => {
+    expect(() => PrBrief.parse(brief)).not.toThrow();
+    expect(() =>
+      PrBrief.parse({ ...brief, intent: null, blast: null, cost_usd: null, missing_inputs: ['intent', 'blast'] }),
+    ).not.toThrow();
+  });
+  it('rejects an unknown missing input and a stored history field is not required', () => {
+    expect(PrBrief.safeParse({ ...brief, missing_inputs: ['bogus'] }).success).toBe(false);
+    expect('history' in PrBrief.shape).toBe(false);
+  });
+  it('BriefModelOutput declares risks, review_focus, summary in order with no optional field', () => {
+    expect(Object.keys(BriefModelOutput.shape)).toEqual(['risks', 'review_focus', 'summary']);
+    for (const f of Object.values(BriefModelOutput.shape)) expect(f.isOptional()).toBe(false);
+    const out = { risks: brief.risks.risks, review_focus: brief.review_focus, summary: 's' };
+    expect(() => BriefModelOutput.parse(out)).not.toThrow();
+  });
+  it('PrBriefResponse parses {brief:null, stale:false} and a stale brief', () => {
+    expect(PrBriefResponse.parse({ brief: null, stale: false })).toEqual({ brief: null, stale: false });
+    expect(PrBriefResponse.parse({ brief, stale: true }).stale).toBe(true);
+    expect(PrBriefResponse.safeParse({ brief: null }).success).toBe(false);
   });
 });

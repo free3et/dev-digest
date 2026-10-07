@@ -201,10 +201,67 @@ export const SmartDiff = z.object({
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
 // ---- Composed PR Brief (pr_brief.json) ----
+/** One place a reviewer should look first. */
+export const BriefReviewFocus = z.object({
+  file: z.string(),
+  /** Grounded line in `file`; null when no line is known. */
+  line: z.number().int().nullable(),
+  reason: z.string(),
+});
+export type BriefReviewFocus = z.infer<typeof BriefReviewFocus>;
+
+/** An input the brief was generated without. */
+export const BriefMissingInput = z.enum([
+  'intent',
+  'blast',
+  'smart_diff',
+  'linked_issue',
+  'context_docs',
+]);
+export type BriefMissingInput = z.infer<typeof BriefMissingInput>;
+
+/** An input that was shortened to fit the token budget. */
+export const BriefTruncatedInput = z.enum([
+  'intent',
+  'context_docs',
+  'linked_issue',
+  'description',
+  'blast_callers',
+  'file_stats',
+]);
+export type BriefTruncatedInput = z.infer<typeof BriefTruncatedInput>;
+
+/** The stored brief of a PR at a given head commit. */
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  summary: z.string(),
+  /** Stored as the `Risks` wrapper; the model returns a flat list. */
   risks: Risks,
-  history: PrHistory,
+  review_focus: z.array(BriefReviewFocus),
+  /** null = no derived intent for this PR. */
+  intent: Intent.nullable(),
+  /** null = blast radius unavailable. */
+  blast: BlastRadius.nullable(),
+  /** PR head commit the brief was generated for. */
+  head_sha: z.string(),
+  generated_at: z.string(),
+  model: z.string(),
+  /** USD spent on the brief; null when the model is unpriced. */
+  cost_usd: z.number().nullable(),
+  missing_inputs: z.array(BriefMissingInput),
+  /** true = the intent was derived for an earlier head than `head_sha`. */
+  intent_stale: z.boolean(),
+  truncated_inputs: z.array(BriefTruncatedInput),
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+/**
+ * What the brief LLM returns. Field order is generation order (summary last).
+ * Only `nullable` (never `optional`) and no min/max, so the strict
+ * json_schema stays valid. The server grounds it and maps it into `PrBrief`.
+ */
+export const BriefModelOutput = z.object({
+  risks: z.array(Risk),
+  review_focus: z.array(BriefReviewFocus),
+  summary: z.string(),
+});
+export type BriefModelOutput = z.infer<typeof BriefModelOutput>;
