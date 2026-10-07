@@ -119,6 +119,25 @@ describe("DiffTab focusFile (AC-17, AC-18)", () => {
     expect(scroll).toHaveBeenCalled();
   });
 
+  it("Smart order: a large file inside an open group is collapsed by default and expanded when focused", () => {
+    const big = files.map((f) => (f.path === "src/core.ts" ? ({ ...f, additions: 5000, patch: "@@ -1,1 +1,2 @@\n a\n+BIGLINE" } as PrFile) : f));
+    const mount = (focusFile?: string) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+            <DiffTab prId="pr1" filesCount={5} files={big} reviews={[]} headSha="abc" focusFile={focusFile} />
+          </NextIntlClientProvider>
+        </QueryClientProvider>,
+      );
+    const plain = mount();
+    expect(screen.queryByText(/BIGLINE/)).not.toBeInTheDocument();
+    plain.unmount();
+
+    mount("src/core.ts");
+    expect(screen.getByText(/BIGLINE/)).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalled();
+  });
+
   it("shows an inline notice when the file is not in the diff", () => {
     renderTab("src/nope.ts");
     expect(screen.getByText("src/nope.ts is not in this diff.")).toBeInTheDocument();

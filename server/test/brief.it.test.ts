@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { PrBrief, PrBriefResponse, type LLMProvider } from '@devdigest/shared';
-import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
+import { PrBrief, PrBriefResponse, type LLMProvider } from '@devdigest/shared';import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
@@ -276,6 +275,50 @@ d('PR brief (Testcontainers pg)', () => {
       expect(text).not.toContain(FIXTURE.summary);
       await logApp.close();
     });
+  });
+
+  it('GET returns a seeded pr_brief row verbatim with zero LLM calls (AC-1)', async () => {
+    const prId = await createPr();
+    const seeded: PrBrief = {
+      summary: 'SEEDED-SUMMARY',
+      risks: { risks: [{ kind: 'k', title: 'Seeded risk', explanation: 'e', severity: 'medium', file_refs: ['src/a.ts'] }] },
+      review_focus: [{ file: 'src/b.ts', line: 3, reason: 'seeded reason' }],
+      intent: null,
+      blast: null,
+      head_sha: 'head-1',
+      generated_at: '2026-10-07T00:00:00.000Z',
+      model: 'seed-model',
+      cost_usd: null,
+      missing_inputs: ['intent'],
+      intent_stale: false,
+      truncated_inputs: [],
+    };
+    await pg.handle.db.insert(t.prBrief).values({ prId, json: seeded });
+    const { app: appP, count } = appWith();
+    const app = await appP;
+    const res = await app.inject({ method: 'GET', url: `/pulls/${prId}/brief` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ brief: seeded, stale: false });
+    expect(count()).toBe(0);
+    await app.close();
+  });
+
+  it('regenerating after the head moved replaces the stored brief (still one row) and clears stale (AC-5, AC-3)', async () => {
+    const prId = await createPr();
+    const { app: appP } = appWith();
+    const app = await appP;
+    await app.inject({ method: 'POST', url: `/pulls/${prId}/brief` });
+    await pg.handle.db.update(t.pullRequests).set({ headSha: 'head-2' }).where(eq(t.pullRequests.id, prId));
+    expect(PrBriefResponse.parse((await app.inject({ method: 'GET', url: `/pulls/${prId}/brief` })).json()).stale).toBe(true);
+
+    const res = await app.inject({ method: 'POST', url: `/pulls/${prId}/brief` });
+    expect(res.statusCode).toBe(200);
+    const rows = await storedJson(prId);
+    expect(rows).toHaveLength(1);
+    expect((rows[0]!.json as { head_sha: string }).head_sha).toBe('head-2');
+    const after = PrBriefResponse.parse((await app.inject({ method: 'GET', url: `/pulls/${prId}/brief` })).json());
+    expect(after).toMatchObject({ stale: false, brief: { head_sha: 'head-2' } });
+    await app.close();
   });
 
   // Last: it writes a workspace setting that later brief generations would pick up.

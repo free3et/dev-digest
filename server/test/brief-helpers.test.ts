@@ -290,6 +290,37 @@ describe('fitBudget (AC-6, AC-26)', () => {
   });
 });
 
+describe('fitBudget blast caller cut order (AC-6 step 4)', () => {
+  const group = (symbol: string, n: number) => ({
+    symbol,
+    callers: Array.from({ length: n }, (_, i) => ({ name: `${symbol}c${i}`, file: `src/${symbol}${i}.ts`, line: i + 1 })),
+    endpoints_affected: [],
+    crons_affected: [],
+  });
+
+  it('removes the lowest-ranked callers (last group, last entries) first and keeps the best-ranked', () => {
+    const blast: BlastRadius = {
+      changed_symbols: [{ name: 'A', file: 'src/a.ts', kind: 'function' }],
+      downstream: [group('A', 20), group('B', 20)],
+      summary: 's',
+    };
+    const facts = baseFacts({ blast, description: null }); // step 3 would cut a description first
+    const full = estimateInputTokens(buildBriefMessages(facts));
+    const r = fitBudget(facts, full - 40);
+
+    expect(r.truncated).toEqual(['blast_callers']);
+    const [a, b] = r.facts.blast!.downstream;
+    expect(a!.callers).toHaveLength(20); // the first group is untouched
+    expect(b!.callers.length).toBeGreaterThan(0);
+    expect(b!.callers.length).toBeLessThan(20);
+    // what is left of the last group is its best-ranked prefix
+    expect(b!.callers.map((c) => c.name)).toEqual(
+      Array.from({ length: b!.callers.length }, (_, i) => `Bc${i}`),
+    );
+    expect(r.tokens).toBeLessThanOrEqual(full - 40);
+  });
+});
+
 describe('groundBrief (AC-8, 9, 10)', () => {
   const blast: BlastRadius = {
     changed_symbols: [{ name: 's', file: 'src/a.ts', kind: 'function' }],

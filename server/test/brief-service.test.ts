@@ -246,6 +246,84 @@ describe('BriefService.generate', () => {
   });
 });
 
+describe('BriefService.generate fact wiring (AC-9, EC-10)', () => {
+  const customOutput = (data: BriefModelOutput) => async (req: StructuredRequest<unknown>) => ({
+    data,
+    model: req.model,
+    tokensIn: 1,
+    tokensOut: 1,
+    costUsd: null,
+    raw: '',
+    attempts: 1,
+  });
+
+  it('keeps a focus line only when it is a blast caller, intent risk-area or latest-review finding line', async () => {
+    const { service, container } = make({
+      intent: {
+        intent: 'Add retries',
+        inScope: [],
+        outOfScope: [],
+        riskAreas: [{ kind: 'data', title: 'T', file: 'src/b.ts', line: 7, explanation: 'e' }],
+        headSha: 'sha-head',
+      },
+      llm: customOutput({
+        risks: [],
+        summary: 's',
+        review_focus: [
+          { file: 'src/c.ts', line: 4, reason: 'blast caller line' },
+          { file: 'src/b.ts', line: 7, reason: 'intent risk-area line' },
+          { file: 'src/a.ts', line: 11, reason: 'finding line of the latest review' },
+          { file: 'src/a.ts', line: 5, reason: 'finding line of an older review' },
+          { file: 'src/a.ts', line: 6, reason: 'dismissed finding line' },
+          { file: 'src/a.ts', line: 99, reason: 'invented' },
+        ],
+      }),
+    });
+    (container.reviewRepo.reviewsForPull as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        review: { id: 'r2', kind: 'review', agentId: 'ag' },
+        findings: [
+          { file: 'src/a.ts', startLine: 11, dismissedAt: null },
+          { file: 'src/a.ts', startLine: 6, dismissedAt: new Date() },
+        ],
+      },
+      { review: { id: 'r1', kind: 'review', agentId: 'ag' }, findings: [{ file: 'src/a.ts', startLine: 5, dismissedAt: null }] },
+    ]);
+
+    const brief = await service.generate('w1', 'pr1');
+    expect(brief.review_focus.map((f) => [f.file, f.line])).toEqual([
+      ['src/c.ts', 4],
+      ['src/b.ts', 7],
+      ['src/a.ts', 11],
+      ['src/a.ts', null],
+      ['src/a.ts', null],
+      ['src/a.ts', null],
+    ]);
+  });
+
+  it('uses an intent derived for an earlier head, flags intent_stale and tells the model so', async () => {
+    const row = (headSha: string) => ({
+      intent: 'Add retries',
+      inScope: ['client'],
+      outOfScope: [],
+      riskAreas: [],
+      headSha,
+    });
+
+    const stale = make({ intent: row('older-sha') });
+    const staleBrief = await stale.service.generate('w1', 'pr1');
+    expect(staleBrief.intent_stale).toBe(true);
+    expect(staleBrief.intent).toEqual({ intent: 'Add retries', in_scope: ['client'], out_of_scope: [] });
+    expect(staleBrief.missing_inputs).not.toContain('intent');
+    expect(JSON.stringify(stale.requests[0]!.messages)).toContain('earlier commit');
+
+    const fresh = make({ intent: row('sha-head') });
+    const freshBrief = await fresh.service.generate('w1', 'pr1');
+    expect(freshBrief.intent_stale).toBe(false);
+    expect(JSON.stringify(fresh.requests[0]!.messages)).not.toContain('earlier commit');
+  });
+});
+
 describe('BriefService.get', () => {
   it('returns {brief:null, stale:false} when nothing is stored and never calls the LLM', async () => {
     const { service, llmProvider } = make();
