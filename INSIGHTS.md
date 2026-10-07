@@ -13,6 +13,18 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Works
 
+- **2026-10-07** — To prove that attached Project Context changes a review, run
+  the same PR twice, document attached vs detached, and compare the findings;
+  a single run only shows the text reached the prompt. The fixture must not
+  hint at the rule: a first fixture whose header comment said "instead of
+  going through AgentsService" made the no-document control flag the violation
+  too. With a neutral fixture the control produced no architecture finding and
+  the attached run did (it echoed `repository.ts`, a word only the document
+  contains). Before the first run, open the PR once (`GET /pulls/:id`) or the
+  review sees `0 changed file(s)`; detach with `PUT /agents/:id/context-docs`
+  `{repo_id, paths: []}`. Pushing a branch to a fork also makes GitHub offer a
+  PR into the upstream repo — nobody should click it.
+
 ## What Doesn't Work
 
 - **2026-09-18** — `server/src/db/migrations/` cannot be trusted as ground truth for the local dev Postgres's actual schema, so don't `pnpm db:generate` there without checking first: `drizzle.__drizzle_migrations` has 17 applied rows while only 10 `.sql` files (`0000`–`0009`) exist in git, and `\d agent_runs` already shows `cost_usd`/`critical_count`/`warning_count`/`suggestion_count` — columns `server/src/db/schema/runs.ts` declares with no migration file past `0009_complex_runaways.sql` to create them. Most likely cause: commit `c6af1e4` ("revert: restore main to the starter state, homework belongs in forks") reset the migrations folder while the `devdigest_pgdata` volume — deliberately never reset, per this file's own `docker compose down -v` gotcha — kept every schema change 7 now-deleted migrations (ids 11–17) made. Generating a new migration against this drifted state risks a wrong/misleading diff; run `docker exec devdigest-postgres psql -U devdigest -d devdigest -c "\d <table>"` and compare against `schema.ts` before trusting `db:generate`'s output, and treat "columns already exist" as a signal to stop and ask, not to skip the migration.
