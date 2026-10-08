@@ -11,6 +11,7 @@ import {
   approxContextTokens,
   dedupeContextPaths,
   formatProjectContextLog,
+  formatSpecsAttachedLog,
   taskLine,
   toSkillPromptBlock,
 } from './helpers.js';
@@ -226,6 +227,7 @@ export class ReviewRunExecutor {
       // Project Context — attached repo docs (own, then via skills), read from the
       // clone working tree now so local edits count. Best-effort: never fails the run.
       const projectContext = await this.buildProjectContext(agent.id, repo, runLog);
+      if (projectContext.specs.length > 0) runLog.info(formatSpecsAttachedLog(projectContext.specs.length));
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with

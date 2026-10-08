@@ -177,3 +177,8 @@ export function approxContextTokens(text: string): number {
 export function formatProjectContextLog(docs: number, tokens: number, skipped: number): string {
   return `project context: ${docs} docs, +~${tokens} tokens${skipped > 0 ? `, ${skipped} skipped` : ''}`;
 }
+
+/** Pre-call line next to `skills: …`; logged only when at least one doc is injected. */
+export function formatSpecsAttachedLog(docs: number): string {
+  return `Specs: ${docs} context doc(s) attached to prompt`;
+}

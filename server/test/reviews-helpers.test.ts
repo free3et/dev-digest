@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { approxContextTokens, dedupeContextPaths, formatProjectContextLog, taskLine } from '../src/modules/reviews/helpers.js';
+import { approxContextTokens, dedupeContextPaths, formatProjectContextLog, formatSpecsAttachedLog, taskLine } from '../src/modules/reviews/helpers.js';
 
 /**
  * Unit coverage for the review task-line. The key invariant: our trusted
@@ -41,5 +41,11 @@ describe('project context helpers (reviews)', () => {
   it('skipped suffix only when M > 0', () => {
     expect(formatProjectContextLog(2, 10, 0)).not.toContain('skipped');
     expect(formatProjectContextLog(2, 10, 1)).toBe('project context: 2 docs, +~10 tokens, 1 skipped');
+  });
+});
+
+describe('formatSpecsAttachedLog', () => {
+  it('names the number of injected context docs', () => {
+    expect(formatSpecsAttachedLog(1)).toBe('Specs: 1 context doc(s) attached to prompt');
   });
 });

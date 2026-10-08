@@ -227,6 +227,9 @@ d('project context in runs (Testcontainers pg)', () => {
     expect(trace.prompt_assembly.user).toContain('# A edited locally');
     expect(contextLines(trace)).toHaveLength(1);
     expect(contextLines(trace)[0]!.msg).toMatch(/^project context: 2 docs, \+~\d+ tokens$/);
+    expect(trace.log.filter((l) => l.msg.startsWith('Specs:')).map((l) => l.msg)).toEqual([
+      'Specs: 2 context doc(s) attached to prompt',
+    ]);
   });
 
   it('AC-12/NFR-6: missing, symlink and oversize docs are skipped, run ends done, one `, 3 skipped` line', async () => {
@@ -254,6 +257,7 @@ d('project context in runs (Testcontainers pg)', () => {
       expect(r.trace.specs_read).toEqual([]);
       expect(r.trace.prompt_assembly.specs).toBeNull();
       expect(contextLines(r.trace).map((l) => l.msg)).toEqual(['project context: 0 docs, +~0 tokens']);
+      expect(r.trace.log.some((l) => l.msg.startsWith('Specs:'))).toBe(false);
     }
     expect(other.trace.prompt_assembly.user).toBe(baseline.trace.prompt_assembly.user);
   });
