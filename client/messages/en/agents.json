@@ -53,6 +53,7 @@
     "tabs": {
       "config": "Config",
       "skills": "Skills",
+      "context": "Context",
       "evals": "Evals",
       "stats": "Stats",
       "ci": "CI"
@@ -119,5 +120,15 @@
     "tokens": "~{count} tokens of skill text enabled",
     "loadError": "Could not load skills.",
     "updateFailed": "Could not update skills."
+  },
+  "contextTab": {
+    "title": "Project context",
+    "hint": "Attached documents are read from the repository at review time and added to the prompt as untrusted data.",
+    "noRepo": "Select a repository to attach its documents",
+    "loading": "Loading documents…",
+    "loadError": "Could not load documents.",
+    "updateFailed": "Could not update attached documents.",
+    "footer": "≈ {total} tokens · own {own} + via skills {inherited}",
+    "caption": "per review pass; large PRs repeat it per diff chunk"
   }
 }

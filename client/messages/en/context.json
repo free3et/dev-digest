@@ -1,24 +1,84 @@
 {
+  "breadcrumb": "Project Context",
   "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
-  "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+  "subtitle": "Markdown documents from the repository clone that agents read as grounding context.",
+  "list": {
+    "ariaLabel": "Documents",
+    "tokens": "≈ {count} tok",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "type": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    }
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
+  "footer": {
+    "summary": "{count, plural, one {# document} other {# documents}} · ≈ {tokens} tokens total · refreshed {when}",
+    "relative": {
+      "now": "just now",
+      "minutes": "{count}m ago",
+      "hours": "{count}h ago",
+      "days": "{count}d ago"
+    }
+  },
+  "states": {
+    "loading": "Loading documents…",
+    "loadError": "Couldn’t load documents",
+    "notCloned": {
+      "title": "Repository not cloned yet",
+      "body": "Project Context reads files from the local clone. Import or sync the repository first."
+    },
+    "empty": {
+      "title": "No documents yet",
+      "body": "No Markdown files were found under specs, docs, insights. Add PRDs, tech specs and acceptance criteria there so agents can read them."
+    },
+    "selectPrompt": "Select a document to preview it."
+  },
+  "panel": {
+    "toggleLabel": "View mode",
+    "preview": "Preview",
+    "edit": "Edit",
+    "loading": "Loading document…",
+    "loadError": "Couldn’t load document",
+    "usedBy": "{count, plural, =0 {Used by 0 agents} one {Used by # agent} other {Used by # agents}}"
   },
   "editor": {
-    "loadError": "Couldn’t load spec",
+    "banner": "Local edit only — not committed. A repository resync overwrites it.",
+    "unsaved": "unsaved",
+    "label": "Document content",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "discard": "Discard",
+    "conflict": "This file changed on disk since you loaded it. Reload to get the latest content.",
+    "reload": "Reload",
+    "saveError": "Couldn’t save document"
+  },
+  "picker": {
+    "filterLabel": "Filter documents",
+    "filterPlaceholder": "Filter documents…",
+    "attachedCount": "{attached} of {total} attached",
+    "listLabel": "Documents",
+    "tokens": "≈ {count} tok",
+    "tooLarge": "Skipped — over 256 KB",
+    "missing": "missing",
+    "viaSkill": "via skill {name}",
+    "noMatch": "No documents match.",
+    "empty": "This repository has no documents yet.",
+    "detach": "Detach",
+    "detachLabel": "Detach {path}",
+    "preview": "Preview {path}",
+    "dragHandle": "Drag to reorder {path}",
+    "moveUp": "Move {path} up",
+    "moveDown": "Move {path} down",
+    "previewLoading": "Loading document…",
+    "previewError": "Couldn’t load document",
+    "previewClose": "Close",
+    "serializesAs": "Serializes as",
+    "type": {
+      "specs": "specs",
+      "docs": "docs",
+      "insights": "insights"
+    }
   }
 }

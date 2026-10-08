@@ -101,6 +101,14 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-10-07** — A deep-link prop such as `focusFile` must reach every
+  collapsed ancestor, not just the leaf: `SmartDiffGroup` does not render its
+  `DiffViewer` while closed (docs and boilerplate groups start closed), so the
+  group's initial `open` has to derive from `focusFile` or `FileCard` never
+  mounts. jsdom has no `Element.prototype.scrollIntoView`; call it as
+  `el?.scrollIntoView?.()` and stub it in tests. `DiffTab/SmartDiffGroup`,
+  `diff-viewer/FileCard/FileCard.tsx:57-66`.
+
 - **2026-10-01** — A new `messages/en/*.json` namespace is auto-loaded by the
   app (`i18n/request.ts` reads the folder) but NOT by tests:
   `renderWithProviders` only registers the namespaces listed in
@@ -151,7 +159,15 @@ _None yet._
 
 ## Tool & Library Notes
 
-- **2026-09-19** — Importing a VALUE (not a type) from `@devdigest/shared` in client code breaks `next build` with `Module not found: Can't resolve './contracts/knowledge.js'`: the vendored package is NodeNext-style TS (`from "./x.js"` meaning `x.ts`), which vitest and `tsc` resolve but webpack does not. Until now every client import from it was `import type`, erased before bundling. `next.config.mjs` now maps `.js` → `.ts` via `resolve.extensionAlias`; `pnpm build` (not typecheck/test) is the check that catches this. Building also rewrites `.next`, so restart a running `next dev` afterwards. Evidence: `client/next.config.mjs`, `src/app/skills/_components/SkillsView/_components/SkillEditorDrawer/helpers.ts` (imports the `SkillInput` zod schema).
+- **2026-10-06** — `mockFetch` in `src/test/render.tsx` only answers 200, or 404
+  for an unmatched route, so an error or `409` path cannot be driven through
+  it: stub fetch by hand with `vi.stubGlobal("fetch", …)` returning a
+  `Response` with the status you need, as the Edit-mode conflict test does.
+  `@devdigest/ui` `ErrorState` hardcodes its "Retry" label, so query that
+  button by the name "Retry" rather than an i18n string.
+  `src/app/repos/[repoId]/context/_components/ContextView/DocPanel/DocPanel.test.tsx`
+
+- **2026-09-19** — Importing a VALUE (not a type) from `@devdigest/shared` in client code breaks `next build` with `Module not found: Can't resolve './contracts/knowledge.js'`: the vendored package is NodeNext-style TS (`from "./x.js"` meaning `x.ts`), which vitest and `tsc` resolve but webpack does not. Until now every client import from it was `import type`, erased before bundling. `next.config.mjs` now maps `.js` → `.ts` via `resolve.extensionAlias`; `pnpm build` (not typecheck/test) is the check that catches this. Building also rewrites `.next`, so restart a running `next dev` afterwards. Evidence: `client/next.config.mjs`, `src/app/skills/_components/SkillsView/_components/SkillEditorDrawer/helpers.ts` (imports the `SkillInput` zod schema). **Refined 2026-10-07:** with the alias in place a value import is fine, so do NOT duplicate a shared constant in client code to dodge it — the Project Context picker did (`CONTEXT_DOC_MAX_BYTES`) and the duplicate was removed; `pnpm build` passes importing it from `@devdigest/shared` (`src/components/context-docs/ContextDocsPicker/helpers.ts`).
 
 - **2026-08-04** — This dev environment's seeded Postgres has zero
   `agent_runs` rows with `findings_count > 0` across all 3 seeded repos
@@ -171,6 +187,24 @@ _None yet._
 - **2026-09-19** — `@devdigest/ui` `Textarea`, `SelectInput` and `Toggle` accept no `id`/`aria-label`, and `FormField`'s `<label>` has no `htmlFor`, so `getByLabelText` cannot reach them. The skill Config tab therefore uses native `<input>/<textarea>/<select>` with `useId()` + `<label htmlFor>`, and wraps each `Toggle` in `<span role="group" aria-label>`. For master–detail state in the URL, tests mock `next/navigation` with a `useSyncExternalStore`-backed `useSearchParams` so `router.replace` really re-renders. Evidence: `src/app/skills/_components/SkillDetail/_components/SkillConfigTab/`, `SkillsView.test.tsx`.
 
 ## Recurring Errors & Fixes
+
+- **2026-10-07** — Clicking a new editor tab does nothing: the tab shows in
+  the bar but the content stays on Config, because `?tab=` is validated by a
+  hand-written list in the PAGE (`agents/[id]/page.tsx` had
+  `VALID_TABS = ["config", "skills"]`) and an unknown value silently falls back
+  to `config`. Component tests of `AgentEditor` pass because they bypass the
+  page. Derive the allowed values from `TABS` (`parseAgentTab`, like
+  `parseSkillTab`) and test the parser against every `TABS` key.
+  `agents/[id]/_components/AgentEditor/helpers.test.ts`
+
+- **2026-10-07** — Every row you click keeps a white outline ("selections pile
+  up"): a row style sets `border: "1px solid transparent"` and the active
+  variant overrides only `borderColor`. When the row stops being active React
+  clears the `borderColor` longhand it no longer sets, and the colour falls
+  back to `currentColor` (the white text colour). Override with the `border`
+  SHORTHAND in the active variant too. Hit in `DocList` and the `DocPanel`
+  Preview/Edit toggle; `SkillCard/styles.ts` already carries the same warning.
+  `ContextView.test.tsx` ("no stale outline") fails on the longhand version.
 
 - **2026-10-01** — Running `pnpm build` while `next dev` is up overwrites the
   shared `client/.next`, and the dev server then answers every page with 500:

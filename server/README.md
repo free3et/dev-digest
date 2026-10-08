@@ -78,6 +78,7 @@ flowchart TB
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast (GET)"]
+    projectContext["project-context<br/>/repos/:id/context (GET) · /repos/:id/context/file (GET, PUT)<br/>/agents/:id/context-docs · /skills/:id/context-docs (GET, PUT)"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
@@ -100,6 +101,7 @@ flowchart TB
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `DEVDIGEST_CONTEXT_ROOTS` | `specs,docs,insights` | Project Context search roots: comma list of folder names from that enum (no globs); an empty or unknown name fails at boot (`ConfigError`) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `PROMPT_LOG_VERBOSE` | unset | `1`/`true` adds line counts, raw sizes and per-item sizes to a stdout-only "Prompt assembled (verbose, local only)" line; needs `NODE_ENV=development` **and** a loopback `API_HOST`, else ignored with a boot warning. Never prompt text |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |
@@ -143,6 +145,55 @@ What the reviewer actually sends to the model is assembled in
 - **Grounding is mandatory.** Every finding must cite a line that exists in the
   diff or it is dropped (`groundFindings`), and the score is recomputed from the
   surviving findings — the model's self-reported score is ignored.
+
+## Project Context attach (agents and skills)
+
+Spec: `specs/2026-10-05-project-context-attach.md`. Module: `modules/project-context/`.
+
+**Routes** (same shape for both owners):
+
+| Route | Notes |
+|-------|-------|
+| `GET /agents/:id/context-docs?repo_id=` | `AgentContextDocs`: the agent's own attached docs plus the ones inherited from its skills, for that repo |
+| `PUT /agents/:id/context-docs` | body `{ repo_id, paths }`; replaces the agent's attachments for that repo (order = array order) |
+| `GET /skills/:id/context-docs?repo_id=` | `SkillContextDocs`: attached docs for that repo + `used_by_agents` |
+| `PUT /skills/:id/context-docs` | body `{ repo_id, paths }`; replaces the skill's attachments for that repo |
+
+- `404` for an unknown/foreign agent, skill or repo. `422` for a duplicate path
+  or a path that is neither in the repo's current document list nor already
+  attached. The list never contains paths outside the search roots, in an
+  excluded segment, with a wrong suffix, via traversal, or through a symlink, so
+  those are all rejected. A path that was attached earlier but has since left
+  the list (e.g. the file became a symlink) stays accepted by `PUT` and reads
+  back as `missing: true`.
+- `200` with every entry `missing: true` when the repo has no clone (nothing is
+  rejected on read).
+- Each attached entry carries `missing` / `too_large` / `approx_tokens`:
+  `missing` = no longer in the repo's document list (or no clone);
+  `too_large` = it exists but is over 256 KB (`CONTEXT_DOC_MAX_BYTES`), tokens
+  `null`. `missing` wins over `too_large`; both are never true together, and
+  `approx_tokens` is `null` when either is set.
+
+**Run injection** (`modules/reviews/run-executor.ts` → `buildProjectContext`):
+
+- Docs are the agent's own attachments for the PR's repo, then those inherited
+  from its enabled skills (skill order), deduped by path (first occurrence wins).
+  Other repos' attachments are never read.
+- Content is read fresh from the clone at run time, so a local edit is
+  included. Missing, symlinked, unreadable and over-256 KB docs are skipped,
+  never failing the run.
+- The result is one `## Project context` section, each doc wrapped as
+  `<untrusted source="<path>">`, appended to the user message. In map-reduce the
+  section is repeated in every chunk's prompt (cost visible in `cost_usd`).
+  No attachments (or all skipped) -> no section, user message unchanged.
+- No extra model call: the number of `completeStructured` calls is identical
+  with and without attachments (single-pass and map-reduce), covered by
+  `test/project-context-run.it.test.ts`.
+- Trace (`GET /runs/:id/trace`): `specs_read` (paths), `specs_tokens`
+  (`{ path, approx_tokens }`), `specs_missing` (skipped paths), plus
+  `prompt_assembly.specs` (the section, `null` when empty).
+- Log line, one per run: `project context: N docs, +~T tokens` with
+  `, K skipped` appended when K > 0.
 
 ## Testing
 

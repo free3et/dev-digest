@@ -20,6 +20,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Doesn't Work
 
+- **2026-10-07** — "Exactly one model call" is NOT guaranteed by calling
+  `completeStructured` once: the real adapters default `maxRetries` to 2 and
+  reprompt on a schema failure (up to 3 billed calls), while `MockLLMProvider`
+  never loops, so a "1 call" assertion passes in tests and fails in production.
+  Pass `{ maxRetries: 0, maxTokens, timeoutMs }` and assert those fields on the
+  captured request, not just the call count. `src/adapters/llm/openai.ts:90-129`,
+  `src/modules/brief/service.ts`, `test/brief-service.test.ts`.
+
 - **2026-09-18** — The PR list's cost column was built as "latest completed run's cost", not "sum of every completed run's cost", and the wrong semantics was documented as deliberate in the contract comment (`// USD cost of the LATEST COMPLETED run… Deliberately not a sum across runs`) — a reviewer reading the comment alone would conclude the behavior was intentional and correct. The underlying query (`doneRunCostsForPulls`) already returns every `done` run per PR; only the grouping function picked the first one. Fixed by replacing `pickLatestCostByPr` with `sumCostByPr` (skips `costUsd: null` runs rather than zeroing the sum) and correcting the contract comment in both `server/src/vendor/shared/contracts/platform.ts` and its client hand-copy. When a list column is described as "the latest X" or "not a sum", check the actual product requirement before trusting the comment — it can describe what was built, not what was asked for. Evidence: `server/src/modules/pulls/helpers.ts:83-98`.
 
 - **2026-07-29** — A green `pnpm test` does not mean the integration tests ran: `*.it.test.ts` files self-skip when no Docker daemon is reachable, so a machine without Docker reports success having exercised none of the DB paths. Evidence: `server/test/helpers/pg.ts:10`.
@@ -45,6 +53,27 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-08-05** — An import of a package absent from both `package.json` and `pnpm-lock.yaml` passes typecheck, unit, and integration lanes locally because a stray copy sits in `server/node_modules` (`fflate`, imported at `src/modules/skills/service.ts:1`), and only a fresh `pnpm install --frozen-lockfile` exposes it as TS2307 — verify a new import against a clean worktree install, not the dev tree. Evidence: `grep fflate package.json pnpm-lock.yaml` returned nothing while `pnpm typecheck` was green.
 
 ## Codebase Patterns
+
+- **2026-10-05** — The clone's working tree is always the default branch:
+  `sync` runs `reset --hard origin/<default>`, and a PR head exists only as
+  the ref `pr-<n>`. Anything that reads repo files from the tree (e.g. project
+  context docs) sees local edits but never the PR's changes, and a resync wipes
+  those edits. `readFile` follows symlinks; `readFileAt(ref, path)` does not, so
+  a tree read needs its own `lstat`/`realpath` guard.
+  `server/src/adapters/git/simple-git.ts:79-95,136-168`
+  - **2026-10-06** — Audited for project-context writes, so a local `.md` edit
+    in the clone is safe: every working-tree reader gates by extension before
+    it reads (`walkClone` `SUPPORTED_EXT`, `parseChangedFiles`, ripgrep
+    `symbols`/`references` `CODE_EXT`, conventions `CONFIG_FILES`), and review
+    input is commit-based (`git.diff`, `readFileAt`). `sync` is the only thing
+    that touches tracked files (`reset --hard`, no `clean`), so an untracked
+    `.<name>.<rand>.tmp` left by a crashed write survives a resync — keep the
+    `.tmp` suffix, the indexers rely on the extension allowlist, not on
+    dotfile hiding. The one ungated reader is `RipgrepCodeIndex.grepWithNode`,
+    which has no non-test caller; a new caller would see `.md` and temp files.
+    The clone dir defaults to `~/.devdigest/workspace` (`DEVDIGEST_CLONE_DIR`),
+    not `server/clones/` as `server/CLAUDE.md` says.
+    `src/adapters/codeindex/ripgrep.ts:83-92`, `src/platform/config.ts:86-88`
 
 - **2026-10-01** — `repoIntel.getBlastRadius` is shallower than its types
   suggest, and `GET /pulls/:id/blast` inherits every gap. `MAX_CALLERS_PER_SYMBOL`
@@ -108,6 +137,15 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Tool & Library Notes
 
+- **2026-10-06** — To assert a log line in an `app.inject` test: `buildApp` takes
+  no logger or stream and `pino` is not a direct dependency (only
+  `pino-pretty`), so it cannot be imported under pnpm. Wrap `app.log.child`
+  and record each child's `info` call; this works at `LOG_LEVEL=warn` because
+  the wrapper sees calls regardless of level, and the handler must log via
+  `req.log.info(...)` (a call on `app.log` is not captured). Also,
+  `pnpm typecheck` excludes `server/test/**`, so only vitest catches type
+  errors in a test file. `test/project-context.it.test.ts` (NFR-4 case)
+
 - **2026-09-25** — `StructuredRequest` (`src/vendor/shared/adapters.ts:55`) has
   no abort `signal` and neither the server LLM adapters nor reviewer-core's
   `OpenRouterProvider` read one, so a timeout around `completeStructured` only
@@ -137,6 +175,36 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-07-29** — `pnpm db:migrate` dumps raw Postgres NOTICE objects (`'extension "vector" already exists, skipping'`, code 42710) that read like errors but are idempotent skips — the run is fine iff it ends with `✓ migrations applied`. Evidence: `src/db/migrate.ts` sets no `onnotice` handler, so the `postgres` client logs every notice to stderr.
 
 ## Recurring Errors & Fixes
+
+- **2026-10-09** — PR Brief answers `409 brief_unavailable` with a reasoning
+  model (`deepseek/deepseek-v4-flash`, `deepseek-v4-pro`) as `risk_brief`: the
+  thinking tokens count against `max_tokens`, so with `MAX_OUTPUT_TOKENS = 1500`
+  the call ends `finish_reason=length`, `content=""`, and reviewer-core throws
+  `OpenRouter structured output failed schema validation for pr_brief` (the raw
+  body is not in the error; raising `LLM_TIMEOUT_MS` does not help). Point
+  `risk_brief` at a non-reasoning model, e.g. `deepseek/deepseek-chat-v3.1`.
+  Without a `risk_brief` override the default is `openai/gpt-4.1`, which fails
+  the same way when only `OPENROUTER_API_KEY` is set.
+  `reviewer-core/src/llm/openrouter.ts:115`, `src/modules/brief/constants.ts:6`
+
+- **2026-10-07** — A per-route `config.rateLimit` is inert in tests:
+  `@fastify/rate-limit` is registered only when `config.nodeEnv !== 'test'`
+  (`src/app.ts:102-104`), so a "6th POST returns 429" case never passes under
+  `appWith`. Build that one app with `nodeEnv: 'development'`. Related: a handler
+  that rethrows `AppError` turns a missing provider key into a 500, because
+  `ConfigError` extends `AppError` with status 500; a feature that must answer
+  409 has to map non-feature errors itself (`src/modules/brief/service.ts`).
+  `test/brief.it.test.ts`.
+
+- **2026-10-07** — A line written with `runLog.info(...)` in
+  `src/modules/reviews/run-executor.ts` AFTER the trace object is built never
+  appears in the persisted trace, only on the SSE stream: the trace's `log` is
+  `runLog.logFor(runId)`, evaluated at construction. Emit run-level lines (e.g.
+  the `project context: N docs, +~T tokens` line) before that point. Related
+  test trap: `agent_runs.status = 'done'` is written BEFORE `run_traces` is
+  saved, so an it-test that reads `/runs/:id/trace` right after
+  `waitForPrRuns` can get `404 Run trace not found` — poll for the trace.
+  `test/project-context-run.it.test.ts`, `test/helpers/runs.ts`
 
 - **2026-10-01** — `GET /pulls/:id/blast` on a PR that was only polled, never
   opened, answers `0 changed symbols … degraded: true`: `pr_files` is filled by

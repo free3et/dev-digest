@@ -31,6 +31,8 @@ import type {
   AuthWorkspace,
   SecretsProvider,
   SecretKey,
+  ContextDocStore,
+  ContextDocEntry,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
 
@@ -332,5 +334,50 @@ export class MockSecretsProvider implements SecretsProvider {
   constructor(private secrets: Partial<Record<string, string>> = {}) {}
   async get(key: SecretKey): Promise<string | undefined> {
     return this.secrets[key as string];
+  }
+}
+
+// ---------- Mock Project Context doc store ----------
+/** In-memory ContextDocStore: keys are repo-relative paths; `root` is ignored. */
+export class MockContextDocStore implements ContextDocStore {
+  public writes: { abs: string; content: string }[] = [];
+  /** Throw this from `list` (e.g. an ENOENT-shaped error) to simulate a missing clone. */
+  public listError?: Error;
+
+  constructor(public files: Record<string, string> = {}) {}
+
+  async list(_root: string, _roots: string[]): Promise<ContextDocEntry[]> {
+    if (this.listError) throw this.listError;
+    return Object.entries(this.files).map(([path, text]) => ({
+      path,
+      text,
+      size: Buffer.byteLength(text),
+      mtime: 0,
+    }));
+  }
+
+  async resolve(_root: string, path: string, _roots: string[]): Promise<string | null> {
+    return path in this.files ? path : null;
+  }
+
+  /** Paths passed to `read`, so tests can pin that a file was never read. */
+  public reads: string[] = [];
+
+  async size(abs: string): Promise<number> {
+    const text = this.files[abs];
+    if (text === undefined) throw new Error(`ENOENT: ${abs}`);
+    return Buffer.byteLength(text);
+  }
+
+  async read(abs: string): Promise<Buffer> {
+    this.reads.push(abs);
+    const text = this.files[abs];
+    if (text === undefined) throw new Error(`ENOENT: ${abs}`);
+    return Buffer.from(text, 'utf8');
+  }
+
+  async writeAtomic(abs: string, content: string): Promise<void> {
+    this.writes.push({ abs, content });
+    this.files[abs] = content;
   }
 }
