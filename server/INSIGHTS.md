@@ -176,6 +176,17 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-09** — PR Brief answers `409 brief_unavailable` with a reasoning
+  model (`deepseek/deepseek-v4-flash`, `deepseek-v4-pro`) as `risk_brief`: the
+  thinking tokens count against `max_tokens`, so with `MAX_OUTPUT_TOKENS = 1500`
+  the call ends `finish_reason=length`, `content=""`, and reviewer-core throws
+  `OpenRouter structured output failed schema validation for pr_brief` (the raw
+  body is not in the error; raising `LLM_TIMEOUT_MS` does not help). Point
+  `risk_brief` at a non-reasoning model, e.g. `deepseek/deepseek-chat-v3.1`.
+  Without a `risk_brief` override the default is `openai/gpt-4.1`, which fails
+  the same way when only `OPENROUTER_API_KEY` is set.
+  `reviewer-core/src/llm/openrouter.ts:115`, `src/modules/brief/constants.ts:6`
+
 - **2026-10-07** — A per-route `config.rateLimit` is inert in tests:
   `@fastify/rate-limit` is registered only when `config.nodeEnv !== 'test'`
   (`src/app.ts:102-104`), so a "6th POST returns 429" case never passes under
