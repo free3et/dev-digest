@@ -58,5 +58,3 @@ A finding without a quoted line and `file:line` is invalid; put it under "Could 
 Length: findings table plus at most one line per finding of explanation; "Rules checked, no violation" is one line per rule id, no evidence prose. Do not restate the diff or the rules' text.
 
 Answer in the user's language; keep paths and code as they are.
-
-<!-- ci-trigger check: no behavioural change, revert after the evals workflow is verified -->
