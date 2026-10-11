@@ -22,6 +22,7 @@ you read and whether it was relevant.
 | `reviewer-core/**` | `reviewer-core/INSIGHTS.md` | `reviewer-core/README.md` |
 | `e2e/**` | `e2e/INSIGHTS.md` | `e2e/README.md` |
 | `devdigest-mcp/**` | `devdigest-mcp/INSIGHTS.md` | — |
+| `evals/**`, `.claude/skills/**`, `.claude/agents/**` | `evals/README.md` | — (see "Which eval to run" below) |
 | adding or changing a test (any package) | — | `TESTING.md` |
 | two or more packages, or root files | `INSIGHTS.md` (root) + each row above | — |
 
@@ -33,6 +34,24 @@ checking that a similar entry isn't already there. **Do not skip this step.**
 
 Skip only the writing, and only when nothing non-obvious came up — a typo or a
 routine change is not an insight, and noise costs more than silence.
+
+## Which eval to run after a change
+
+Run the smallest check that covers the change, from `evals/`. CI does the same
+selection on a PR (`evals/scripts/ci-detect.mjs`): a skill or agent without
+evals is logged as `SKIP`, never a failure.
+
+| You changed                                  | Minimum check                                                                 |
+| -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `.claude/skills/<name>/**`                   | `pnpm eval:quality` + that skill's eval: `pnpm vitest run skills/<name>/`     |
+| `.claude/agents/<name>.md`                   | that agent's eval: `pnpm vitest run agents/<name>/` + `pnpm eval:workflow`    |
+| `AGENTS.md` (`CLAUDE.md` is a symlink to it), `.claude/CLAUDE.md`, routing rules | `pnpm eval:workflow`                                                       |
+| an eval case (`*.cases.ts`) or a grader (`evals/src/scoring/**`) | re-calibrate the baseline: `pnpm eval:repeat <pattern> -n 2 --label baseline`, then `pnpm eval:delta` |
+
+Notes: `eval:repeat` is capped at 2 runs. Practices must stay inside the
+artifact's own output contract, or no model can pass them (see root
+`INSIGHTS.md`). CI runs model evals on OpenRouter under a spend budget;
+locally they use the Claude Code subscription.
 
 ## Stack
 
@@ -50,6 +69,8 @@ Drizzle ORM + Postgres (pgvector) · Zod · Vitest · agent-browser (e2e)
 | Engine          | `cd reviewer-core && npm test \| npm run typecheck`        |
 | MCP server      | `cd devdigest-mcp && npm test \| npm run typecheck`        |
 | E2E (hermetic)  | `cd e2e && npm run e2e:hermetic`                            |
+| Evals (static)  | `cd evals && pnpm eval:quality` (no model, free)           |
+| Evals (model)   | `cd evals && pnpm eval:skills \| eval:agents \| eval:workflow` |
 
 Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
@@ -62,14 +83,15 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 | `reviewer-core/`            | Pure engine: diff + repo map → prompt → LLM → findings    |
 | `e2e/`                      | Deterministic browser flows, no LLM                       |
 | `devdigest-mcp/`            | Local stdio MCP server: 5 PR-review tools over the API    |
+| `evals/`                    | Evals for the harness: skills, agents, workflow tiers     |
 | `server/src/vendor/shared/` | `@devdigest/shared` — Zod contracts for every package     |
 | `client/src/vendor/ui/`     | `@devdigest/ui` — vendored UI primitives                  |
 
 ## Conventions (non-default — you cannot infer these from the code)
 
 - **Not a monorepo workspace.** Each package has its own `package.json` and its
-  own lockfile. `server/` + `client/` use **pnpm**; `reviewer-core/` + `e2e/` +
-  `devdigest-mcp/` use **npm**. Never run the wrong package manager in a package.
+  own lockfile. `server/` + `client/` + `evals/` use **pnpm**; `reviewer-core/` +
+  `e2e/` + `devdigest-mcp/` use **npm**. Never run the wrong package manager in a package.
 - Cross-package imports resolve through **tsconfig path aliases**, not published
   modules. `reviewer-core` is consumed as TypeScript **source** and never emits
   JS — its `build` is a typecheck.
