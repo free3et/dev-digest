@@ -188,6 +188,15 @@ workflow cases:
 
 ### Wiring it into GitHub Actions (per-PR)
 
+> **In this repo** the real workflow is `.github/workflows/evals.yml` (change detection via
+> `scripts/ci-detect.mjs`, a skip line for artifacts without evals, a credit preflight and a
+> per-job budget report). Models: skills `deepseek/deepseek-chat`, agents
+> `anthropic/claude-haiku-5.5`, workflow tier `google/gemini-2.5-flash`, judge
+> `google/gemini-2.5-flash`; override with the repo variables `SKILLS_MODEL`, `AGENTS_MODEL`,
+> `WORKFLOW_MODEL`, `EVAL_JUDGE_MODEL` or the `workflow_dispatch` inputs. `quality` and `skills`
+> block; `agents` and the workflow tier are report-first. The example below is the minimal
+> shape, kept for reference.
+
 The engine is CI-ready: bring the proxy up as a step, wait for it, run the tier, tear it down. Put
 the OpenRouter key in the repo's **Actions secrets** as `OPENROUTER_API_KEY` (Settings → Secrets and
 variables → Actions). Create `.github/workflows/<name>.yml` in your repo:

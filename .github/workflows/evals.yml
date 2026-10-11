@@ -10,10 +10,13 @@
 # Models are job parameters, not UI. Precedence, first set wins:
 #   workflow_dispatch input  >  repo variable (Settings → Variables)  >  default below.
 #   SKILLS_MODEL : skills tier, content only, no proxy (default deepseek/deepseek-chat — cheap)
-#   TOOL_MODEL   : agents + workflow tiers, tool use via LiteLLM (default google/gemini-2.5-flash —
-#                  the one that dispatches subagents; deepseek-chat does the work inline instead)
-#   judge        : EVAL_JUDGE_MODEL (default google/gemini-2.5-flash)
-# Repo variables: SKILLS_MODEL, TOOL_MODEL, EVAL_JUDGE_MODEL.
+#   AGENTS_MODEL   : agents tier, tool use via LiteLLM (default anthropic/claude-haiku-5.5 - 4/4 on
+#                    architecture-reviewer, cheaper than gemini-2.5-flash, which went 4/4, 2/4, 3/4)
+#   WORKFLOW_MODEL : workflow tier (default google/gemini-2.5-flash - it dispatches the subagent;
+#                    haiku-5.5 reviewed inline and failed dispatch; deepseek-chat does too)
+#   judge          : EVAL_JUDGE_MODEL (default google/gemini-2.5-flash)
+# Repo variables: SKILLS_MODEL, AGENTS_MODEL, WORKFLOW_MODEL, EVAL_JUDGE_MODEL.
+# (TOOL_MODEL, used earlier for both tiers, is no longer read - delete it.)
 #
 # Gating: quality (static) and skills block; agents and the workflow tier are report-first
 # (warning + step summary) until they are stable across several runs on main.
@@ -44,8 +47,12 @@ on:
         description: 'Model for the skills tier (OpenRouter slug). Empty = repo variable / default'
         type: string
         default: ''
-      tool_model:
-        description: 'Model for the agents + workflow tiers (OpenRouter slug). Empty = repo variable / default'
+      agents_model:
+        description: 'Model for the agents tier (OpenRouter slug). Empty = repo variable / default'
+        type: string
+        default: ''
+      workflow_model:
+        description: 'Model for the workflow tier (OpenRouter slug). Empty = repo variable / default'
         type: string
         default: ''
       judge_model:
@@ -200,7 +207,7 @@ jobs:
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
+      EVAL_MODEL: ${{ inputs.agents_model || vars.AGENTS_MODEL || 'anthropic/claude-haiku-5.5' }}
     steps:
       - uses: actions/checkout@v4
       - name: Check OPENROUTER_API_KEY and credit
@@ -256,7 +263,7 @@ jobs:
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
+      EVAL_MODEL: ${{ inputs.workflow_model || vars.WORKFLOW_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
       - name: Check OPENROUTER_API_KEY and credit
