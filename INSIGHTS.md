@@ -39,6 +39,13 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   before writing a practice; reworded to "attributes the finding to a rule or
   its source doc", severities `blocker/high/medium/low/nit`, threshold 0.8.
   `evals/agents/architecture-reviewer/architecture-reviewer.cases.ts`
+  **Then, same day** — the reworded cases went 4/4 on CI and 2/4 on the very
+  next run of identical code (gemini-2.5-flash, threshold 0.8): one green LLM-
+  judged run is not evidence, so agents are report-first in CI. One of the two
+  misses was a contradiction between practices (one allowed `low` findings,
+  the other forbade any "fabricated documented-rule violation"; the agent's
+  `low` finding cites a rule, so the judge failed it) — read the judge
+  `evidence` before blaming the model.
 
 - **2026-10-11** — A `workflow` eval cannot see two things it seems to
   measure: (a) nested `server/`, `client/`, `reviewer-core/` `CLAUDE.md` are

@@ -15,6 +15,9 @@
 #   judge        : EVAL_JUDGE_MODEL (default google/gemini-2.5-flash)
 # Repo variables: SKILLS_MODEL, TOOL_MODEL, EVAL_JUDGE_MODEL.
 #
+# Gating: quality (static) and skills block; agents and the workflow tier are report-first
+# (warning + step summary) until they are stable across several runs on main.
+#
 # Budget: the OpenRouter key's own limit is the hard cap. Each model job runs
 # scripts/openrouter-check.mjs first (fails below EVAL_MIN_CREDIT_USD remaining) and
 # scripts/budget-report.mjs last (step summary + warning above EVAL_JOB_BUDGET_USD).
@@ -213,9 +216,18 @@ jobs:
       - name: Start LiteLLM proxy
         run: docker compose -f proxy/docker-compose.yml up -d && pnpm proxy:wait
       # Trailing slash: "agents/architecture-reviewer" is a substring of "…-lite" and would run both.
-      - name: Run agent evals
+      # Report-first: LLM-judged agent cases are not yet stable (same code: 4/4, then 2/4), so a
+      # failure is a warning + step summary, not a red PR. Remove `continue-on-error` to block.
+      - name: Run agent evals (report-first)
+        id: agent
+        continue-on-error: true
         run: pnpm vitest run "agents/${{ matrix.agent }}/" --no-file-parallelism
-      - if: failure()
+      - name: Report agent eval failure
+        if: steps.agent.outcome == 'failure'
+        run: |
+          echo "::warning title=Agent evals failed (report-first)::${{ matrix.agent }} - see the 'Run agent evals' step log; this does not block the PR"
+          echo "### Agent ${{ matrix.agent }}: FAILED (report-first, not blocking)" >> "$GITHUB_STEP_SUMMARY"
+      - if: failure() || steps.agent.outcome == 'failure'
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()
         run: docker compose -f proxy/docker-compose.yml down
