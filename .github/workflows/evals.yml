@@ -241,9 +241,9 @@ jobs:
     if: needs.detect.outputs.run_workflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Advisory: dispatch/activation are behaviour-shaped and flaky on non-Anthropic models.
-    # Flip to false (and make the check required) once it is stable on main.
-    continue-on-error: true
+    # Advisory: dispatch/activation are behaviour-shaped and flaky on non-Anthropic models. The eval
+    # step below is continue-on-error, so the job stays green and a failure shows up as a warning
+    # annotation + step summary. Remove `continue-on-error` from that step to make it blocking.
     defaults:
       run:
         working-directory: evals
@@ -276,9 +276,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Start LiteLLM proxy
         run: docker compose -f proxy/docker-compose.yml up -d && pnpm proxy:wait
-      - name: Run workflow evals
+      - name: Run workflow evals (advisory)
+        id: wf
+        continue-on-error: true
         run: pnpm eval:workflow --no-file-parallelism
-      - if: failure()
+      - name: Report advisory failure
+        if: steps.wf.outcome == 'failure'
+        run: |
+          echo "::warning title=Workflow-tier evals failed (advisory)::see the 'Run workflow evals' step log; this tier does not block the PR"
+          echo "### Workflow tier: FAILED (advisory, not blocking)" >> "$GITHUB_STEP_SUMMARY"
+      - if: failure() || steps.wf.outcome == 'failure'
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()
         run: docker compose -f proxy/docker-compose.yml down

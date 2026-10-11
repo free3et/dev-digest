@@ -38,11 +38,30 @@ const changed = (process.env.CHANGED_FILES ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-/** Does evals/<tier>/<name>/ contain at least one *.eval.ts? */
+/** The artifact a tier's evals exercise: .claude/skills/<n>/SKILL.md or .claude/agents/<n>.md. */
+function artifactPath(tier, name) {
+  return tier === "skills"
+    ? join(REPO_ROOT, ".claude", "skills", name, "SKILL.md")
+    : join(REPO_ROOT, ".claude", "agents", `${name}.md`);
+}
+
+/** Does evals/<tier>/<name>/ contain at least one *.eval.ts AND does the artifact it loads exist? */
 function hasEvals(tier, name) {
   const dir = join(EVALS_DIR, tier, name);
   if (!existsSync(dir)) return false;
-  return readdirSync(dir).some((f) => f.endsWith(".eval.ts"));
+  if (!readdirSync(dir).some((f) => f.endsWith(".eval.ts"))) return false;
+  // evals for a deleted/renamed artifact would throw "agent not found" — skip, don't fail.
+  return existsSync(artifactPath(tier, name));
+}
+
+/** Why a name was skipped, for the log line. */
+function skipReason(tier, name) {
+  const dir = join(EVALS_DIR, tier, name);
+  const hasEvalFile = existsSync(dir) && readdirSync(dir).some((f) => f.endsWith(".eval.ts"));
+  if (hasEvalFile && !existsSync(artifactPath(tier, name))) {
+    return `evals exist but ${artifactPath(tier, name).replace(REPO_ROOT + "/", "")} is missing`;
+  }
+  return `no evals in evals/${tier}/${name}`;
 }
 
 /** Collect distinct artifact names touched under a `.claude` and/or `evals` prefix. */
@@ -97,6 +116,6 @@ console.error(`workflow tier : ${runWorkflow ? "run" : "skip"}`);
 // A skill can carry skill-creator-format evals (.claude/skills/<n>/evals/) that vitest does not run.
 const foreign = (n) => existsSync(join(REPO_ROOT, ".claude", "skills", n, "evals"));
 for (const n of skippedSkills) {
-  console.error(`SKIP skill ${n} (no vitest evals in evals/skills/${n}${foreign(n) ? "; has skill-creator evals under .claude/skills — not run in CI" : ""})`);
+  console.error(`SKIP skill ${n} (${skipReason("skills", n)}${foreign(n) ? "; has skill-creator evals under .claude/skills — not run in CI" : ""})`);
 }
-for (const n of skippedAgents) console.error(`SKIP agent ${n} (no evals in evals/agents/${n})`);
+for (const n of skippedAgents) console.error(`SKIP agent ${n} (${skipReason("agents", n)})`);

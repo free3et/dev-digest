@@ -7,13 +7,11 @@ const REVIEW_PROMPT = `Audit this diff against DevDigest's documented structural
 
 ${fx("checkout-service.diff")}`;
 
-// A second real diff whose violations map onto DevDigest-SPECIFIC rule names
-// (`reviewer-core-zero-io`, `reviewer-core-ground-findings-gate`) that a competent model will
-// describe in prose but will not spontaneously name unless the agent forces a citation. This is
-// the discriminating case for the strict-vs-lite A/B: both variants should FIND both problems,
-// but only the strict variant (which keeps the "cite the exact documented rule per finding" hard
-// rule) should reliably emit the identifier. The checkout diff's textbook violations don't
-// discriminate — the model volunteers `inward-only-dependencies`/`di-discipline` either way.
+// A second real diff whose violations are reviewer-core boundaries (no I/O except the injected
+// LLMProvider; findings must pass groundFindings() before they are emitted). The practices ask
+// the agent to ATTRIBUTE each finding to a rule or the doc it comes from — they must not demand a
+// specific identifier string, because no document defines one: the agent's own scheme is
+// A*/F*/X* plus the module INSIGHTS.md it is told to read first.
 const REVIEWER_CORE_PROMPT = `Audit this diff against DevDigest's documented structural contracts.
 
 ${fx("reviewer-core-gate.diff")}`;
@@ -27,9 +25,14 @@ const BENIGN_PROMPT = `Audit this diff against DevDigest's documented structural
 
 ${fx("benign-refactor.diff")}`;
 
-// Shared across the strict (architecture-reviewer) and relaxed (architecture-reviewer-lite)
-// variants so the two agents are graded on the exact same task — the only thing that should
-// move between the two runs is whether "cites the specific documented rule" keeps passing.
+// Practices must stay inside the agent's own output contract (.claude/agents/architecture-reviewer.md):
+// severities are blocker/high/medium/low/nit, the report ends with "Rules checked, no violation" /
+// "Could not verify", and it has NO PASS/FAIL verdict — the gate decision belongs to /run-plan
+// (blocker|high with confidence >= 0.5). A practice that asks for more than the contract is a
+// test defect, not a model failure.
+//
+// Threshold 0.8: one nondeterministic practice must not turn a PR red, but a case that misses two
+// of six does.
 export const cases: AgentCase[] = [
   {
     name: "flags both violations in the checkout diff with severity and a citable rule",
@@ -38,12 +41,12 @@ export const cases: AgentCase[] = [
     practices: [
       "flags the domain file (checkout.ts) importing a type from 'fastify' as a violation of the inward-only dependency rule between Domain and Presentation layers",
       "flags the `new PgCheckoutRepository()` call inside service.ts as a violation of DI discipline (concrete adapters/repositories must be constructed only in the composition root / container)",
-      "names the specific documented rule identifier for EVERY finding (e.g. `inward-only-dependencies`, `di-discipline`) rather than describing the problem only in prose",
-      "assigns a severity (critical/high/medium/low/info) to each finding",
+      "names a rule for EVERY finding (a rule id such as A*/X*, or the named rule from the onion-architecture skill) rather than describing the problem only in prose",
+      "assigns a severity (blocker/high/medium/low/nit) to each finding",
       "quotes the offending line verbatim as evidence for each finding, not a paraphrase",
-      "ends with an explicit PASS/FAIL gate verdict based on whether any critical or high findings exist",
+      "reports the counts by severity in its Summary",
     ],
-    threshold: 1.0,
+    threshold: 0.8,
     maxTurns: 25,
   },
   {
@@ -64,12 +67,12 @@ export const cases: AgentCase[] = [
     practices: [
       "flags the `import { readFileSync } from 'node:fs'` added to reviewer-core/src/pipeline/run.ts as a violation (reviewer-core must do no I/O except the injected LLMProvider)",
       "flags that runPipeline now returns `deduped` directly, skipping the mandatory `groundFindings()` gate before emitting findings",
-      "names the exact documented rule identifier `reviewer-core-zero-io` for the fs-import finding rather than only describing it in prose",
-      "names the exact documented rule identifier `reviewer-core-ground-findings-gate` for the skipped-gate finding rather than only describing it in prose",
+      "attributes the fs-import finding to a rule or to the document it comes from (a rule id, or a file such as reviewer-core/README.md or INSIGHTS.md) rather than only describing it in prose",
+      "attributes the skipped-gate finding to a rule or to the document it comes from rather than only describing it in prose",
       "quotes the offending line verbatim as evidence for each finding, not a paraphrase",
-      "ends with an explicit PASS/FAIL gate verdict based on whether any critical or high findings exist",
+      "assigns a severity (blocker/high/medium/low/nit) to each finding",
     ],
-    threshold: 1.0,
+    threshold: 0.8,
     maxTurns: 25,
   },
   {
@@ -77,11 +80,11 @@ export const cases: AgentCase[] = [
     kind: "quality",
     prompt: BENIGN_PROMPT,
     practices: [
-      "reports no violations for the benign rename (or records only `info`-level, non-blocking observations) — it does not invent a critical/high/medium finding",
+      "reports no violations for the benign rename (or records only `low`/`nit` observations) — it does not invent a blocker/high/medium finding",
       "does not fabricate a documented-rule violation where the diff violates none of the checked rules",
-      "the final gate verdict is PASS",
+      "lists the rules it checked under 'Rules checked, no violation' instead of approving silently",
     ],
-    threshold: 1.0,
+    threshold: 0.8,
     maxTurns: 25,
   },
 ];
