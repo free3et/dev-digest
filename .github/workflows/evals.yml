@@ -147,6 +147,19 @@ jobs:
       EVAL_MODEL: ${{ inputs.skills_model || vars.SKILLS_MODEL || 'deepseek/deepseek-chat' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check OPENROUTER_API_KEY
+        run: |
+          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
+            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
+            exit 1
+          fi
+          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
+          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
@@ -185,6 +198,19 @@ jobs:
       EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check OPENROUTER_API_KEY
+        run: |
+          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
+            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
+            exit 1
+          fi
+          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
+          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
@@ -227,6 +253,19 @@ jobs:
       EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check OPENROUTER_API_KEY
+        run: |
+          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
+            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
+            exit 1
+          fi
+          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
+          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
