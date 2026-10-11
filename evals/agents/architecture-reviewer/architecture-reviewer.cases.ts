@@ -81,7 +81,7 @@ export const cases: AgentCase[] = [
     prompt: BENIGN_PROMPT,
     practices: [
       "reports no violations for the benign rename (or records only `low`/`nit` observations) — it does not invent a blocker/high/medium finding",
-      "does not fabricate a documented-rule violation where the diff violates none of the checked rules",
+      "any observation it does report is rated `low` or `nit` and is not presented as a blocker/high/medium violation of a documented rule",
       "lists the rules it checked under 'Rules checked, no violation' instead of approving silently",
     ],
     threshold: 0.8,
