@@ -62,6 +62,7 @@
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
     "filesCount": "{count} files",
+    "notInDiff": "{path} is not in this diff.",
     "findingLines": "{count} finding-lines",
     "groupedByRole": "Smart Diff · grouped by role",
     "coreDescription": "The substance of the change — review closely",

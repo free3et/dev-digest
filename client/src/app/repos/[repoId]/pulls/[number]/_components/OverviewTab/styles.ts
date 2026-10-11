@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 export const s = {
+  briefCard: { minWidth: 0, marginBottom: 16 } satisfies CSSProperties,
   briefGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))",

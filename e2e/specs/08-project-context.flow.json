@@ -1,0 +1,12 @@
+{
+  "name": "Project Context is reachable from the sidebar",
+  "description": "From the seeded repo's PR list, click the WORKSPACE sidebar item 'Project Context' and confirm the /repos/<id>/context route loads. The page body is either the document list or the 'Repository not cloned yet' state depending on whether the seeded repo has a clone, so the flow asserts only the route and the page chrome (no model call, read-only). Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Project Context", "click"], "label": "click the Project Context sidebar item" },
+    { "cmd": ["wait", "--url", "/context"], "label": "navigate to the context route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "documents fetch settles" },
+    { "cmd": ["wait", "--text", "Project Context"], "label": "the Project Context page renders" }
+  ]
+}

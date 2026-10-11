@@ -36,7 +36,9 @@ pnpm db:seed                                # idempotent demo data
   missing key surfaces at call time, not at startup.
 - The DB schema already contains every table, including ones no starter code
   writes to. An empty table is expected, not a bug.
-- `repo-intel` clones into `server/clones/` — gitignored, and excluded from any
+- `repo-intel` clones into `~/.devdigest/workspace` by default (override with
+  `DEVDIGEST_CLONE_DIR`; `src/platform/config.ts`). A `server/clones/` folder may
+  still exist locally from older runs — it is gitignored and excluded from any
   search you run.
 
 ## Read when

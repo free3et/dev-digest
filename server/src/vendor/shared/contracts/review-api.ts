@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Finding, Verdict } from './findings.js';
-import { BlastDegradedReason, BlastRadius, PrIntent, SmartDiff } from './brief.js';
+import { BlastDegradedReason, BlastRadius, PrBrief, PrIntent, SmartDiff } from './brief.js';
 
 /**
  * A2 — Review-Core API surface contracts. These extend the core
@@ -81,3 +81,13 @@ export const BlastRadiusResponse = BlastRadius.extend({
   impacted_endpoints: z.array(z.string()),
 });
 export type BlastRadiusResponse = z.infer<typeof BlastRadiusResponse>;
+
+/**
+ * PR Brief for a PR. `brief` is null when never generated; `stale` is true
+ * when the cached brief's `head_sha` differs from the PR's current head.
+ */
+export const PrBriefResponse = z.object({
+  brief: PrBrief.nullable(),
+  stale: z.boolean(),
+});
+export type PrBriefResponse = z.infer<typeof PrBriefResponse>;

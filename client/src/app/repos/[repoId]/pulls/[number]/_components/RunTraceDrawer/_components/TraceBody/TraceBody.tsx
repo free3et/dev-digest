@@ -8,7 +8,7 @@ import { Badge } from "@devdigest/ui";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import { PROMPT_COLORS } from "../../constants";
 import { formatSeconds, formatTokens } from "../../helpers";
-import { formatCostUsd } from "@/lib/format";
+import { formatCostUsd, formatTokenCount } from "@/lib/format";
 import { s } from "../../styles";
 import { TraceSection } from "../TraceSection";
 import { ToolCallRow } from "../ToolCallRow";
@@ -19,6 +19,9 @@ import { Row, Stat } from "../atoms";
 export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  // Old traces have no `specs_tokens` / `specs_missing`: paths only, no missing row.
+  const specTokens = new Map((trace.specs_tokens ?? []).map((e) => [e.path, e.approx_tokens]));
+  const specsMissing = trace.specs_missing ?? [];
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -41,14 +44,29 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
               {trace.specs_read.length === 0 ? (
                 <span style={s.specsNone}>{t("trace.config.none")}</span>
               ) : (
-                trace.specs_read.map((sp, i) => (
-                  <span key={i} className="mono" style={s.spec}>
-                    {sp}
-                  </span>
-                ))
+                trace.specs_read.map((sp, i) => {
+                  const tok = specTokens.get(sp);
+                  return (
+                    <span key={i} className="mono" style={s.spec}>
+                      {sp}
+                      {tok !== undefined && <span style={s.specTokens}> {t("trace.config.specTokens", { count: formatTokenCount(tok) })}</span>}
+                    </span>
+                  );
+                })
               )}
             </div>
           </Row>
+          {specsMissing.length > 0 && (
+            <Row label={t("trace.config.specsMissing")}>
+              <div style={s.specsWrap}>
+                {specsMissing.map((sp, i) => (
+                  <span key={i} className="mono" style={s.spec}>
+                    {sp}
+                  </span>
+                ))}
+              </div>
+            </Row>
+          )}
         </div>
       </TraceSection>
 

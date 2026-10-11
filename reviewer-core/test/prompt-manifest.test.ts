@@ -15,7 +15,7 @@ describe('assemblePrompt manifest', () => {
     task: `Review PR #1 "${SECRET} title"`,
     prDescription: `desc ${SECRET}`,
     skills: [`### s1\n${SECRET} skill body`, '### s2\nbody'],
-    specs: [`private spec ${SECRET}`],
+    specs: [{ path: 'docs/spec.md', text: `private spec ${SECRET}` }],
     memory: ['remember this'],
     repoMap: `map ${SECRET}`,
     callers: `callers ${SECRET}`,

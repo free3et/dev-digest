@@ -4,6 +4,7 @@ import type {
   GitHubClient,
   GitClient,
   CodeIndex,
+  ContextDocStore,
   Embedder,
   LLMProvider,
 } from '@devdigest/shared';
@@ -15,6 +16,7 @@ import { LocalSecretsProvider } from '../adapters/secrets/local.js';
 import { LocalNoAuthProvider } from '../adapters/auth/local.js';
 import { OctokitGitHubClient } from '../adapters/github/octokit.js';
 import { SimpleGitClient } from '../adapters/git/simple-git.js';
+import { FsContextDocStore } from '../adapters/context-docs/fs-store.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
 import { AnthropicProvider } from '../adapters/llm/anthropic.js';
@@ -24,6 +26,7 @@ import { estimateCost } from '../adapters/llm/pricing.js';
 import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
+import { ProjectContextRepository } from '../modules/project-context/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
@@ -45,6 +48,8 @@ export interface ContainerOverrides {
   git?: GitClient;
   codeIndex?: CodeIndex;
   embedder?: Embedder;
+  /** Project Context clone-tree access — tests inject MockContextDocStore. */
+  contextDocs?: ContextDocStore;
   /** Pre-built providers by id (skip key lookup). */
   llm?: Partial<Record<'openai' | 'anthropic' | 'openrouter', LLMProvider>>;
   /** repo-intel facade (T1.1+) — tests inject mock RepoIntel implementations. */
@@ -65,6 +70,7 @@ export class Container {
   private _git?: GitClient;
   private _github?: GitHubClient;
   private _codeIndex?: CodeIndex;
+  private _contextDocs?: ContextDocStore;
   private _embedder?: Embedder;
   private llmCache = new Map<string, LLMProvider>();
 
@@ -72,6 +78,7 @@ export class Container {
   // runs). Constructed here, in the composition root, so consuming modules use
   // `container.agentsRepo` instead of reaching into another module's folder.
   private _agentsRepo?: AgentsRepository;
+  private _contextDocLinksRepo?: ProjectContextRepository;
   private _reviewRepo?: ReviewRepository;
   private _skillsRepo?: SkillsRepository;
   private _repoIntel?: RepoIntel;
@@ -92,6 +99,18 @@ export class Container {
     if (this.overrides.git) return this.overrides.git;
     this._git ??= new SimpleGitClient(this.config.cloneDir);
     return this._git;
+  }
+
+  /** Project Context docs in the clone working tree (also the hand-off port for 1b). */
+  get contextDocs(): ContextDocStore {
+    if (this.overrides.contextDocs) return this.overrides.contextDocs;
+    this._contextDocs ??= new FsContextDocStore();
+    return this._contextDocs;
+  }
+
+  /** Project Context links (agent/skill -> repo docs); used by the run executor. */
+  get contextDocLinksRepo(): Pick<ProjectContextRepository, 'agentDocs' | 'inheritedDocs'> {
+    return (this._contextDocLinksRepo ??= new ProjectContextRepository(this.db));
   }
 
   get agentsRepo(): AgentsRepository {

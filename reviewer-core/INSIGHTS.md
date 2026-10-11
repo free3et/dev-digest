@@ -49,7 +49,13 @@ _None yet._
 
 ## Codebase Patterns
 
-_None yet._
+- **2026-10-07** — `wrapUntrusted(label, text)` in `src/prompt.ts` does NOT
+  escape `label`, so a label built from user data (a document path in
+  `specs`) must be escaped by the caller — `escapeLabel` does `&`, `"`, `<`,
+  `>` (`&` first) for specs only; every other label is a fixed literal. The
+  closing-tag neutralisation is an exact, case-sensitive match on
+  `</untrusted>`: `</UNTRUSTED>` or `</untrusted >` in a document pass through
+  unchanged (pre-existing, not fixed). `reviewer-core/test/prompt.test.ts`
 
 ## Tool & Library Notes
 

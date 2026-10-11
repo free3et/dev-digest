@@ -72,6 +72,18 @@ describe('routes (no DB)', () => {
     await app.close();
   });
 
+  it('PUT /repos/:id/context/file without base_hash → 422 before touching the DB', async () => {
+    const app = await buildApp({ config });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/repos/00000000-0000-4000-8000-000000000000/context/file',
+      payload: { path: 'docs/a.md', content: 'x' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('validation_error');
+    await app.close();
+  });
+
   it('GET /pulls/:id/blast with a non-uuid id → 422 before touching the DB', async () => {
     const app = await buildApp({ config });
     const res = await app.inject({ method: 'GET', url: '/pulls/not-a-uuid/blast' });

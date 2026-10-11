@@ -17,6 +17,13 @@ import {
   Settings,
   Repo,
   PrDetail,
+  ContextDocWrite,
+  CONTEXT_DOC_MAX_BYTES,
+  ContextDocsUpdate,
+  ContextAttachment,
+  PrBrief,
+  PrBriefResponse,
+  BriefModelOutput,
 } from '@devdigest/shared';
 
 /**
@@ -238,5 +245,88 @@ describe('BlastRadiusResponse', () => {
     expect(BlastDegradedReason.safeParse('bogus').success).toBe(false);
     const { impacted_endpoints: _omit, ...rest } = base;
     expect(() => BlastRadiusResponse.parse(rest)).toThrow();
+  });
+});
+
+describe('ContextDocWrite byte cap', () => {
+  const w = (content: string) => ContextDocWrite.safeParse({ path: 'docs/a.md', content, base_hash: 'h' });
+  it('accepts exactly the cap in bytes', () => {
+    expect(CONTEXT_DOC_MAX_BYTES).toBe(262_144);
+    expect(w('a'.repeat(262_144)).success).toBe(true);
+  });
+  it('rejects one byte over', () => {
+    expect(w('a'.repeat(262_145)).success).toBe(false);
+  });
+  it('counts UTF-8 bytes, not UTF-16 units', () => {
+    // 3 bytes each: 87_382 * 3 = 262_146 > cap, 87_381 * 3 = 262_143 fits
+    expect(w('\u20ac'.repeat(87_382)).success).toBe(false);
+    expect(w('\u20ac'.repeat(87_381)).success).toBe(true);
+  });
+});
+
+describe('project context attach contracts', () => {
+  const repo_id = '11111111-1111-4111-8111-111111111111';
+  it('ContextDocsUpdate rejects duplicate paths', () => {
+    expect(ContextDocsUpdate.safeParse({ repo_id, paths: ['docs/a.md', 'docs/a.md'] }).success).toBe(false);
+    expect(ContextDocsUpdate.safeParse({ repo_id, paths: ['docs/a.md', 'docs/b.md'] }).success).toBe(true);
+  });
+  it('ContextAttachment invariants: too_large only when not missing, tokens null when flagged', () => {
+    const base = { path: 'docs/a.md', doc_type: 'docs' as const };
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: null, missing: true, too_large: true }).success).toBe(false);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: 5, missing: false, too_large: true }).success).toBe(false);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: null, missing: false, too_large: true }).success).toBe(true);
+    expect(ContextAttachment.safeParse({ ...base, approx_tokens: 5, missing: false, too_large: false }).success).toBe(true);
+  });
+  it('RunTrace without specs_tokens / specs_missing still parses (EC-5)', () => {
+    const trace = RunTrace.parse({
+      config: { agent: 'a', version: 'v1', model: 'm', pr: 1, source: 'local' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: 0, findings: 0, grounding: '0/0 passed' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '{}',
+      memory_pulled: [],
+      specs_read: [],
+      log: [],
+    });
+    expect(trace.specs_tokens).toBeUndefined();
+    expect(trace.specs_missing).toBeUndefined();
+  });
+});
+
+describe('PrBrief contracts', () => {
+  const brief = {
+    summary: 'Adds X.',
+    risks: { risks: [{ kind: 'security', title: 't', explanation: 'e', severity: 'high', file_refs: ['a.ts'] }] },
+    review_focus: [{ file: 'a.ts', line: 3, reason: 'r' }, { file: 'b.ts', line: null, reason: 'r2' }],
+    intent: { intent: 'i', in_scope: [], out_of_scope: [] },
+    blast: { changed_symbols: [], downstream: [], summary: 's' },
+    head_sha: 'abc',
+    generated_at: '2026-10-07T00:00:00.000Z',
+    model: 'gpt-x',
+    cost_usd: 0.01,
+    missing_inputs: ['smart_diff'],
+    intent_stale: false,
+    truncated_inputs: ['intent', 'blast_callers'],
+  };
+  it('parses a full brief and one with null intent/blast/cost', () => {
+    expect(() => PrBrief.parse(brief)).not.toThrow();
+    expect(() =>
+      PrBrief.parse({ ...brief, intent: null, blast: null, cost_usd: null, missing_inputs: ['intent', 'blast'] }),
+    ).not.toThrow();
+  });
+  it('rejects an unknown missing input and a stored history field is not required', () => {
+    expect(PrBrief.safeParse({ ...brief, missing_inputs: ['bogus'] }).success).toBe(false);
+    expect('history' in PrBrief.shape).toBe(false);
+  });
+  it('BriefModelOutput declares risks, review_focus, summary in order with no optional field', () => {
+    expect(Object.keys(BriefModelOutput.shape)).toEqual(['risks', 'review_focus', 'summary']);
+    for (const f of Object.values(BriefModelOutput.shape)) expect(f.isOptional()).toBe(false);
+    const out = { risks: brief.risks.risks, review_focus: brief.review_focus, summary: 's' };
+    expect(() => BriefModelOutput.parse(out)).not.toThrow();
+  });
+  it('PrBriefResponse parses {brief:null, stale:false} and a stale brief', () => {
+    expect(PrBriefResponse.parse({ brief: null, stale: false })).toEqual({ brief: null, stale: false });
+    expect(PrBriefResponse.parse({ brief, stale: true }).stale).toBe(true);
+    expect(PrBriefResponse.safeParse({ brief: null }).success).toBe(false);
   });
 });

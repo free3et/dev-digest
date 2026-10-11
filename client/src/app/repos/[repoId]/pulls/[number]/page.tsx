@@ -22,6 +22,7 @@ import { useActiveRepo, useRepoNotFound } from "../../../../../lib/repo-context"
 import { ApiError } from "../../../../../lib/api";
 import { githubPrUrl } from "../../../../../lib/github-urls";
 import type { FindingRecord } from "@devdigest/shared";
+import { diffFocusQuery } from "./helpers";
 
 export default function PRDetailPage() {
   const params = useParams<{ repoId: string; number: string }>();
@@ -70,6 +71,10 @@ export default function PRDetailPage() {
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
   const setTab = (t: string) => setParam("tab", t);
+  // Review-focus click: one replace sets tab=diff, file and (optional) line.
+  const openFile = (file: string, line: number | null) => {
+    router.replace(`/repos/${repoId}/pulls/${number}?${diffFocusQuery(search.toString(), file, line)}`);
+  };
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -138,7 +143,7 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prBody={pr.body} prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={pr.head_sha} />}
+        {tab === "overview" && <OverviewTab prBody={pr.body} prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={pr.head_sha} onOpenFile={openFile} />}
 
         {tab === "findings" && (
           <FindingsTab
@@ -163,6 +168,7 @@ export default function PRDetailPage() {
               invalidateIntent();
               refetchReviews();
               qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
+              qc.invalidateQueries({ queryKey: ["pr-brief", prId] });
             }}
           />
         )}
@@ -176,6 +182,7 @@ export default function PRDetailPage() {
             reviews={runs}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            focusFile={search.get("file")}
           />
         )}
       </div>

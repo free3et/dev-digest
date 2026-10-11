@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
@@ -40,11 +40,11 @@ const files: PrFile[] = [
   "src/core.ts",
 ].map((path) => ({ path, additions: 1, deletions: 0, patch }) as PrFile);
 
-function renderTab() {
+function renderTab(focusFile?: string | null) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
-        <DiffTab prId="pr1" filesCount={5} files={files} reviews={[]} headSha="abc" repoFullName="o/r" />
+        <DiffTab prId="pr1" filesCount={5} files={files} reviews={[]} headSha="abc" repoFullName="o/r" focusFile={focusFile} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
@@ -85,5 +85,66 @@ describe("DiffTab smart order", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "Smart order" }));
     expect(groupHeaders()).toHaveLength(5);
+  });
+});
+
+describe("DiffTab focusFile (AC-17, AC-18)", () => {
+  const scroll = vi.fn();
+  beforeEach(() => {
+    scroll.mockClear();
+    Element.prototype.scrollIntoView = scroll;
+  });
+
+  it("Smart order: opens the collapsed docs group and the file, and scrolls to it", () => {
+    renderTab("README.md");
+    const docs = groupHeaders().find((h) => h.textContent?.startsWith("Docs"));
+    expect(docs).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("README.md")).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalled();
+    // the other collapsed group stays collapsed
+    expect(groupHeaders().find((h) => h.textContent?.startsWith("Boilerplate"))).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("Original order: a large file is expanded and scrolled to", () => {
+    const big = files.map((f) => (f.path === "src/core.ts" ? ({ ...f, additions: 5000, patch: "@@ -1,1 +1,2 @@\n a\n+BIGLINE" } as PrFile) : f));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+          <DiffTab prId="pr1" filesCount={5} files={big} reviews={[]} headSha="abc" focusFile="src/core.ts" />
+        </NextIntlClientProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Original order" }));
+    expect(screen.getByText(/BIGLINE/)).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalled();
+  });
+
+  it("Smart order: a large file inside an open group is collapsed by default and expanded when focused", () => {
+    const big = files.map((f) => (f.path === "src/core.ts" ? ({ ...f, additions: 5000, patch: "@@ -1,1 +1,2 @@\n a\n+BIGLINE" } as PrFile) : f));
+    const mount = (focusFile?: string) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+            <DiffTab prId="pr1" filesCount={5} files={big} reviews={[]} headSha="abc" focusFile={focusFile} />
+          </NextIntlClientProvider>
+        </QueryClientProvider>,
+      );
+    const plain = mount();
+    expect(screen.queryByText(/BIGLINE/)).not.toBeInTheDocument();
+    plain.unmount();
+
+    mount("src/core.ts");
+    expect(screen.getByText(/BIGLINE/)).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalled();
+  });
+
+  it("shows an inline notice when the file is not in the diff", () => {
+    renderTab("src/nope.ts");
+    expect(screen.getByText("src/nope.ts is not in this diff.")).toBeInTheDocument();
+  });
+
+  it("shows no notice without focusFile or when it is present", () => {
+    renderTab("src/core.ts");
+    expect(screen.queryByText(/is not in this diff/)).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { homedir } from 'node:os';
 import { join, isAbsolute, resolve } from 'node:path';
+import { parseContextRoots } from '../modules/project-context/helpers.js';
+import { ConfigError } from './errors.js';
 
 /**
  * Central, zod-validated environment config. Loaded once at startup.
@@ -43,6 +45,8 @@ const EnvSchema = z.object({
   // sizes, per-item sizes — still never prompt text). Honored only in
   // NODE_ENV=development AND when the API binds loopback; see loadConfig.
   PROMPT_LOG_VERBOSE: z.string().optional(),
+  // Project Context search roots: comma list of folder names from specs|docs|insights.
+  DEVDIGEST_CONTEXT_ROOTS: z.string().optional(),
 });
 
 /** True for a loopback bind address (the only place verbose prompt logging may run). */
@@ -79,6 +83,8 @@ export type AppConfig = {
   promptLogVerbose: boolean;
   /** PROMPT_LOG_VERBOSE was set but refused (non-development or non-loopback bind) — warn at boot. */
   promptLogVerboseIgnored: boolean;
+  /** Project Context search-root folder names (DEVDIGEST_CONTEXT_ROOTS). */
+  contextRoots: string[];
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -88,7 +94,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const cloneDir = isAbsolute(cloneDirRaw) ? cloneDirRaw : resolve(process.cwd(), cloneDirRaw);
   const verboseRequested = parsed.PROMPT_LOG_VERBOSE === '1' || parsed.PROMPT_LOG_VERBOSE === 'true';
   const verboseAllowed = parsed.NODE_ENV === 'development' && isLoopbackHost(parsed.API_HOST);
+  let contextRoots: string[];
+  try {
+    contextRoots = parseContextRoots(parsed.DEVDIGEST_CONTEXT_ROOTS);
+  } catch (e) {
+    throw new ConfigError((e as Error).message);
+  }
   return {
+    contextRoots,
     promptLogVerbose: verboseRequested && verboseAllowed,
     promptLogVerboseIgnored: verboseRequested && !verboseAllowed,
     databaseUrl: parsed.DATABASE_URL,

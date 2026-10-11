@@ -13,6 +13,18 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Works
 
+- **2026-10-07** — To prove that attached Project Context changes a review, run
+  the same PR twice, document attached vs detached, and compare the findings;
+  a single run only shows the text reached the prompt. The fixture must not
+  hint at the rule: a first fixture whose header comment said "instead of
+  going through AgentsService" made the no-document control flag the violation
+  too. With a neutral fixture the control produced no architecture finding and
+  the attached run did (it echoed `repository.ts`, a word only the document
+  contains). Before the first run, open the PR once (`GET /pulls/:id`) or the
+  review sees `0 changed file(s)`; detach with `PUT /agents/:id/context-docs`
+  `{repo_id, paths: []}`. Pushing a branch to a fork also makes GitHub offer a
+  PR into the upstream repo — nobody should click it.
+
 ## What Doesn't Work
 
 - **2026-09-18** — `server/src/db/migrations/` cannot be trusted as ground truth for the local dev Postgres's actual schema, so don't `pnpm db:generate` there without checking first: `drizzle.__drizzle_migrations` has 17 applied rows while only 10 `.sql` files (`0000`–`0009`) exist in git, and `\d agent_runs` already shows `cost_usd`/`critical_count`/`warning_count`/`suggestion_count` — columns `server/src/db/schema/runs.ts` declares with no migration file past `0009_complex_runaways.sql` to create them. Most likely cause: commit `c6af1e4` ("revert: restore main to the starter state, homework belongs in forks") reset the migrations folder while the `devdigest_pgdata` volume — deliberately never reset, per this file's own `docker compose down -v` gotcha — kept every schema change 7 now-deleted migrations (ids 11–17) made. Generating a new migration against this drifted state risks a wrong/misleading diff; run `docker exec devdigest-postgres psql -U devdigest -d devdigest -c "\d <table>"` and compare against `schema.ts` before trusting `db:generate`'s output, and treat "columns already exist" as a signal to stop and ask, not to skip the migration.
@@ -41,6 +53,12 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Codebase Patterns
 
+- **2026-10-04** — Not every `specs/` folder holds specs: `e2e/specs/` is
+  the browser-flow suite (`*.flow.json`). A path guard like `*/specs/*` for an
+  agent that writes markdown specs or docs lets it write into the e2e suite.
+  The `spec-creator` profile denies `e2e/specs/*` explicitly and allows only
+  `*.md`; `doc-writer` matched `*/specs/*` and got the same deny the same day.
+  `.claude/hooks/agent-guard.sh` (profiles `doc-writer`, `spec-creator`)
 - **2026-09-26** — "Latest review per agent" (keep `kind === 'review'`, newest
   per `agentId ?? 'none'`) is implemented three times on purpose, because a
   server module may not import another module's helpers: `pickCountedReviews`
@@ -62,6 +80,17 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Tool & Library Notes
 
+- **2026-10-04** — For agent-facing test runs, raw `pnpm test` output is the
+  token sink, not test time (all four packages run in ~15 s). A blind
+  `tail -n 12` is no fix: vitest prints the `Failed Tests` block *above* the
+  summary, so the tail kept the counts and dropped the assertion, and the
+  agent re-ran the raw suite to see it (this is what `check-all.sh` did until
+  today). What works: `vitest related --run --reporter=dot --silent
+  --passWithNoTests <files>` with `NO_COLOR=1`, then print from the
+  `Failed Tests` line on. `related` accepts a test file as well as source
+  files, and in `server/` it needs `--exclude '**/*.it.test.ts'` like `run`.
+  `scripts/check-pkg.sh`
+
 - **2026-09-25** — A `tools` allowlist does not make a subagent read-only
   while it has `Bash`: `> file`, `tee` and `sed -i` still write, and
   `permissionMode: plan` does not close that gap. `architecture-reviewer`
@@ -71,7 +100,8 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   with synthetic input: `printf '%s' '{"tool_name":"Write","tool_input":
   {"file_path":"'$PWD'/server/src/x.ts"}}' | CLAUDE_PROJECT_DIR=$PWD
   .claude/hooks/agent-guard.sh test-writer; echo $?` prints `2`.
-  `planner` and `researcher` still rely on their prompt alone.
+  `implementation-planner` (formerly `planner`) and `researcher` still rely
+  on their prompt alone, by choice (2026-10-04).
   `.claude/hooks/agent-guard.sh`
 
 - **2026-09-25** — An agent file added to `.claude/agents/` is not callable in
@@ -85,10 +115,10 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-09-25** — Subagents can spawn subagents by default (up to three
   layers below the main conversation), so "single-level" is not automatic:
   omit `Agent` from the agent's `tools` list (or set
-  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`). `planner`, `implementer` and
+  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`). `implementation-planner`, `implementer` and
   `researcher` all rely on the omission. Source:
   https://code.claude.com/docs/en/sub-agents (read through a summarizing
-  fetch, so verify before quoting). `.claude/agents/planner.md:4`
+  fetch, so verify before quoting). `.claude/agents/implementation-planner.md:5`
 
 - **2026-07-29** — Half this repo is pnpm and half is npm, so running `pnpm install` in `reviewer-core/` or `e2e/` would create a second competing lockfile — match the lockfile already in the directory, not the root README's pnpm prerequisite.
 
@@ -129,12 +159,17 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   `.claude/agents/test-writer.md:11-17`
 
 - **2026-09-25** — Does `skills:` in agent frontmatter really preload
-  `onion-architecture` and `frontend-ui-architecture` for `planner` and
+  `onion-architecture` and `frontend-ui-architecture` for `implementation-planner` and
   `implementer`? The rule comes from the subagent docs, not from a run in
   this repo. After a restart, delegate one step from
   `docs/improvement-plan.md` and check that the report cites layering rules;
   if it does not, move the skills into the delegation prompt.
   `.claude/agents/implementer.md:6-8`
+  - **2026-10-04** — Now matters more: both agents preload only the core
+    (`onion-architecture`, `frontend-ui-architecture`, `engineering-insights`)
+    and load domain skills through `Skill` on demand. Also check that the
+    implementer report's "Skills applied" lists the on-demand ones the plan
+    named. `.claude/agents/implementer.md:7-10`
 
 - **2026-08-05** — Is `repoIntel.getConventionSamples()` filtering tests out right for this feature? It reuses the review-context rank filter (`isJunkPath` drops `.test.`/`.spec.`), so testing conventions — some of the most useful house rules — are structurally invisible to the extractor. Evidence: `server/src/modules/repo-intel/service.ts:629-630,709-728`.
   **Fixed 2026-09-20** — `isJunkPath` is unchanged; extract adds

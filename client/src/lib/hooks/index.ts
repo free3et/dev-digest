@@ -12,3 +12,4 @@ export * from "./repo-intel";
 export * from "./skills";
 export * from "./skill-stats";
 export * from "./conventions";
+export * from "./context-docs";

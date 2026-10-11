@@ -7,6 +7,7 @@ one package. Human-first prose and diagrams; agents read it on demand via the
 | Path             | What                                                         |
 | ---------------- | ------------------------------------------------------------ |
 | `agent-prompts/` | System prompts for the built-in reviewers + model choice notes |
+| `retro/`         | Output of `/workflow-retro`: orchestration retrospectives of multi-agent runs (ledger), not code lessons |
 
 Package-local reference material goes in `<package>/docs/`.
 

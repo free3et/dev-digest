@@ -16,7 +16,7 @@ describe('prompt assembly + injection hardening', () => {
       system: 'You are a reviewer.',
       skills: ['## secret-gate\nDetect sk_live'],
       memory: ['Do not flag try/catch around JSON.parse'],
-      specs: ['# Security baseline\nNo secrets in code.'],
+      specs: [{ path: 'specs/a&"b.md', text: '# Security baseline\nNo secrets in code.' }],
       diff: '@@ -1 +1 @@\n+ stripeKey',
       task: "Review PR #482 'rate limit'",
     });
@@ -26,6 +26,8 @@ describe('prompt assembly + injection hardening', () => {
     expect(assembly.skills).toContain('secret-gate');
     expect(messages[1]!.content).toContain('## Diff to review');
     expect(messages[1]!.content).toContain('<untrusted source="diff">');
+    expect(messages[1]!.content).toContain('## Project context\nThe documents below are reference requirements');
+    expect(messages[1]!.content).toContain('<untrusted source="specs/a&amp;&quot;b.md">');
   });
 });
 

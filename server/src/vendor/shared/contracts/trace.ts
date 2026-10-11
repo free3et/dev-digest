@@ -91,6 +91,9 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /** Absent on traces written before project-context attach. */
+  specs_tokens: z.array(z.object({ path: z.string(), approx_tokens: z.number().int().min(0) })).optional(),
+  specs_missing: z.array(z.string()).optional(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;
