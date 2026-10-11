@@ -113,3 +113,5 @@ Fill the details from `references/report-template.md`.
   running the wrong one.
 - Keep it scannable: tables for numbers, one line per finding header, no prose
   walls.
+
+<!-- ci-trigger check: no behavioural change, revert after the evals workflow is verified -->
