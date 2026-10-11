@@ -6,7 +6,8 @@
  *
  *   .claude/skills/<name>/**   OR  evals/skills/<name>/**   → run evals/skills/<name>  (content tier)
  *   .claude/agents/<name>.md   OR  evals/agents/<name>/**   → run evals/agents/<name>  (tool tier)
- *   ./CLAUDE.md / .claude/CLAUDE.md / any agent / engine change → run the workflow tier
+ *   ./AGENTS.md (CLAUDE.md is a symlink to it, so a diff names AGENTS.md) / ./CLAUDE.md /
+ *   .claude/CLAUDE.md / any agent / engine change → run the workflow tier
  *   (nested server/ client/ CLAUDE.md deliberately do NOT trigger it)
  *
  * A changed artifact with NO written evals is NOT a failure: it is reported on the `skipped_*`
@@ -92,7 +93,7 @@ const runWorkflow =
   ALL ||
   changed.some(
   (f) =>
-    /^(\.claude\/)?CLAUDE\.md$/.test(f) ||
+    /^(\.claude\/)?(CLAUDE|AGENTS)\.md$/.test(f) ||
     /^\.claude\/agents\/.+\.md$/.test(f) ||
     /^evals\/workflow\//.test(f) ||
     /^evals\/src\//.test(f),

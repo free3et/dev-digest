@@ -3,7 +3,7 @@
 # What runs is decided by evals/scripts/ci-detect.mjs from the PR diff:
 #   .claude/skills/<n>/**    → evals/skills/<n>   (content tier, no proxy)
 #   .claude/agents/<n>.md    → evals/agents/<n>   (tool tier, LiteLLM proxy) + the workflow tier
-#   ./CLAUDE.md, .claude/CLAUDE.md → workflow tier (nested server/ client/ CLAUDE.md do not trigger it)
+#   ./AGENTS.md (CLAUDE.md symlinks to it), .claude/CLAUDE.md → workflow tier (nested server/ client/ CLAUDE.md do not trigger it)
 # A changed skill/agent with NO written evals is not tested and not a failure: it is logged as
 # "SKIP <name>" (job log, annotation and step summary).
 #
@@ -27,6 +27,7 @@ on:
     paths:
       - '.claude/**'
       - 'CLAUDE.md'
+      - 'AGENTS.md' # CLAUDE.md is a symlink to it: the diff names AGENTS.md
       - 'evals/**'
       - '.github/workflows/evals.yml'
   workflow_dispatch:
