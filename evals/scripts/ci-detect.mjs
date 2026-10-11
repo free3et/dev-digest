@@ -6,10 +6,13 @@
  *
  *   .claude/skills/<name>/**   OR  evals/skills/<name>/**   → run evals/skills/<name>  (content tier)
  *   .claude/agents/<name>.md   OR  evals/agents/<name>/**   → run evals/agents/<name>  (tool tier)
- *   CLAUDE.md / .claude/CLAUDE.md / any agent / engine change → run the workflow tier
+ *   ./CLAUDE.md / .claude/CLAUDE.md / any agent / engine change → run the workflow tier
+ *   (nested server/ client/ CLAUDE.md deliberately do NOT trigger it)
  *
  * A changed artifact with NO written evals is NOT a failure: it is reported on the `skipped_*`
  * outputs so the job can print a visible "SKIP <name> (no evals)" line instead of going red.
+ *
+ * EVAL_ALL=1 (manual workflow_dispatch) ignores the diff and selects every artifact that has evals.
  *
  * Emits GitHub Actions step outputs (skills, agents, run_workflow, skipped_skills, skipped_agents)
  * to $GITHUB_OUTPUT. Pure filesystem + string work — no deps.
@@ -21,6 +24,14 @@ import { fileURLToPath } from "node:url";
 
 const EVALS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = join(EVALS_DIR, "..");
+
+const ALL = process.env.EVAL_ALL === "1";
+
+/** Names of every directory under evals/<tier>/ — used for the "run everything" mode. */
+function allNames(tier) {
+  const dir = join(EVALS_DIR, tier);
+  return existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) : [];
+}
 
 const changed = (process.env.CHANGED_FILES ?? "")
   .split("\n")
@@ -44,14 +55,12 @@ function touched(reClaude, reEvals) {
   return [...names].sort();
 }
 
-const skillNames = touched(
-  /^\.claude\/skills\/([^/]+)\//,
-  /^evals\/skills\/([^/]+)\//,
-);
-const agentNames = touched(
-  /^\.claude\/agents\/([^/]+)\.md$/,
-  /^evals\/agents\/([^/]+)\//,
-);
+const skillNames = ALL
+  ? allNames("skills")
+  : touched(/^\.claude\/skills\/([^/]+)\//, /^evals\/skills\/([^/]+)\//);
+const agentNames = ALL
+  ? allNames("agents")
+  : touched(/^\.claude\/agents\/([^/]+)\.md$/, /^evals\/agents\/([^/]+)\//);
 
 const skills = skillNames.filter((n) => hasEvals("skills", n));
 const skippedSkills = skillNames.filter((n) => !hasEvals("skills", n));
@@ -60,14 +69,15 @@ const skippedAgents = agentNames.filter((n) => !hasEvals("agents", n));
 
 // The workflow tier measures the LIVE harness, so anything that changes it re-triggers it:
 // the root or .claude CLAUDE.md, any agent definition, the workflow cases, or the engine itself.
-const runWorkflow = changed.some(
+const runWorkflow =
+  ALL ||
+  changed.some(
   (f) =>
-    f === "CLAUDE.md" ||
-    f === ".claude/CLAUDE.md" ||
+    /^(\.claude\/)?CLAUDE\.md$/.test(f) ||
     /^\.claude\/agents\/.+\.md$/.test(f) ||
     /^evals\/workflow\//.test(f) ||
     /^evals\/src\//.test(f),
-);
+  );
 
 const out = process.env.GITHUB_OUTPUT;
 const write = (k, v) => (out ? appendFileSync(out, `${k}=${v}\n`) : console.log(`${k}=${v}`));
@@ -84,5 +94,9 @@ console.error(`changed files : ${changed.length}`);
 console.error(`skills → run  : ${skills.join(", ") || "(none)"}`);
 console.error(`agents → run  : ${agents.join(", ") || "(none)"}`);
 console.error(`workflow tier : ${runWorkflow ? "run" : "skip"}`);
-if (skippedSkills.length) console.error(`SKIP skills (no evals): ${skippedSkills.join(", ")}`);
-if (skippedAgents.length) console.error(`SKIP agents (no evals): ${skippedAgents.join(", ")}`);
+// A skill can carry skill-creator-format evals (.claude/skills/<n>/evals/) that vitest does not run.
+const foreign = (n) => existsSync(join(REPO_ROOT, ".claude", "skills", n, "evals"));
+for (const n of skippedSkills) {
+  console.error(`SKIP skill ${n} (no vitest evals in evals/skills/${n}${foreign(n) ? "; has skill-creator evals under .claude/skills — not run in CI" : ""})`);
+}
+for (const n of skippedAgents) console.error(`SKIP agent ${n} (no evals in evals/agents/${n})`);
