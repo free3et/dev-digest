@@ -8,29 +8,30 @@ import type { WorkflowCase } from "../src/index.js";
  * Read-only: Read/Grep/Glob/Agent/Skill only, enforced as a hard `tools` cap; every case also
  * asserts no Bash/Write/Edit appears in the trace.
  *
- * Budget: 5 sessions total (cap: 6).
- *   1. reads session   — ONE session, one independently-reported check per doc
- *   2. reads control   — same prompt, empty tmpdir, no project context
- *   3. dispatch        — separate: long multi-task prompts make the model skip the dispatch
- *   4. activation (+)  — separate
- *   5. activation (−)  — separate: a negative is only meaningful when nothing pushes toward the skill
+ * Budget: 6 sessions total (cap: 6).
+ *   1. reads · server+client   — ONE session, one independently-reported check per doc
+ *   2. reads control           — same prompt as (1), empty tmpdir, no project context
+ *   3. reads · core+tests      — second session; no control of its own (1+2 already prove the
+ *                                 harness, not the prompt, is what routes the reads)
+ *   4. dispatch                — separate: long multi-task prompts make the model skip the dispatch
+ *   5. activation (+)          — separate
+ *   6. activation (−)          — separate: a negative is only meaningful when nothing pushes toward the skill
  *
- * Only doc-reading is merged: it is cheap and stable. Dispatch/activation measured in a 6-part
- * prompt were skipped by the model (see the root INSIGHTS.md, What Doesn't Work).
+ * Doc-reading is merged only two parts at a time: a 4-part prompt made gemini-2.5-flash do the
+ * first part and skip the other three (CI run on PR #9; haiku did the same locally, see the root
+ * INSIGHTS.md, What Doesn't Work). Dispatch/activation are never merged.
  */
 export const cases: WorkflowCase[] = [
-  // --- 1 + 2: doc-reading routing, treatment + control in one block ------------------------------
+  // --- 1 + 2: doc-reading routing, server + client, treatment + control ---------------------------
   {
     kind: "session",
-    name: "docs routing",
+    name: "docs routing · server+client",
     // Parts name a concrete file under each package so the NESTED CLAUDE.md is reachable. None
     // mentions CLAUDE.md / INSIGHTS / README — reading them must come from the harness.
     prompt: [
       "Нічого не змінюй у файлах — лише аналіз. Зроби по порядку:",
       "1. Я хочу додати новий ендпоінт POST /reviews/:id/rerun у server/src/modules/reviews/routes.ts. Скажи, що треба врахувати.",
       "2. Я хочу змінити сторінку client/src/app/agents/page.tsx. Скажи, що треба врахувати.",
-      "3. Я хочу змінити збирання промпту в reviewer-core/src/index.ts. Скажи, що треба врахувати.",
-      "4. Я хочу додати тест до цього змінюваного коду. Скажи, де і як.",
     ].join("\n"),
     expectFilesRead: [
       // Nested CLAUDE.md is injected by the harness, NOT read via the Read tool, so it never shows
@@ -39,14 +40,28 @@ export const cases: WorkflowCase[] = [
       "server/README.md", //   root "Read when": API route     (part 1)
       "client/INSIGHTS.md", // from client/CLAUDE.md          (part 2)
       "client/README.md", //   root "Read when": page / hook   (part 2)
-      "reviewer-core/INSIGHTS.md", // from reviewer-core/CLAUDE.md (part 3)
-      "TESTING.md", //          root "Read when": adding a test (part 4)
     ],
     control: true, // same prompt, no project context → none of the files above may be read
-    maxTurns: 20,
+    maxTurns: 14,
   },
 
-  // --- 3: dispatch -------------------------------------------------------------------------------
+  // --- 3: doc-reading routing, reviewer-core + tests (no control of its own) ----------------------
+  {
+    kind: "session",
+    name: "docs routing · core+tests",
+    prompt: [
+      "Нічого не змінюй у файлах — лише аналіз. Зроби по порядку:",
+      "1. Я хочу змінити збирання промпту в reviewer-core/src/index.ts. Скажи, що треба врахувати.",
+      "2. Я хочу додати тест для reviewer-core/src/index.ts. Скажи, де і як.",
+    ].join("\n"),
+    expectFilesRead: [
+      "reviewer-core/INSIGHTS.md", // from reviewer-core/CLAUDE.md (part 1)
+      "TESTING.md", //                root "Read when": adding a test (part 2)
+    ],
+    maxTurns: 14,
+  },
+
+  // --- 4: dispatch -------------------------------------------------------------------------------
   {
     kind: "dispatch",
     // Does NOT name the subagent: routing must come from the agent's `description`.
@@ -59,7 +74,7 @@ export const cases: WorkflowCase[] = [
     maxTurns: 8,
   },
 
-  // --- 4: activation, positive -------------------------------------------------------------------
+  // --- 5: activation, positive -------------------------------------------------------------------
   {
     kind: "activation",
     name: "engineering-insights activates on a found root cause",
@@ -72,7 +87,7 @@ export const cases: WorkflowCase[] = [
     maxTurns: 4,
   },
 
-  // --- 5: activation, negative -------------------------------------------------------------------
+  // --- 6: activation, negative -------------------------------------------------------------------
   {
     kind: "activation",
     name: "engineering-insights does NOT activate on a plain question",

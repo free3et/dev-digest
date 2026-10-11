@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "tiers": {
+    "skills": {
+      "model": "deepseek/deepseek-chat",
+      "judge": "google/gemini-2.5-flash",
+      "source": "CI runs 38170824386, 38171501822 (PR #9)",
+      "runs": 2,
+      "recorded": "2026-10-11",
+      "tests": {
+        "skills/dependency-checker/dependency-checker.eval.ts > distinguishes internal (path-alias) dependencies from external npm dependencies": "pass",
+        "skills/dependency-checker/dependency-checker.eval.ts > full report follows the required 5-section structure with a Mermaid graph": "pass",
+        "skills/dependency-checker/dependency-checker.eval.ts > severity tiers are used consistently and recommendations are specific, not vague": "pass"
+      }
+    },
+    "agents": {
+      "model": "anthropic/claude-haiku-5.5",
+      "judge": "google/gemini-2.5-flash",
+      "source": "CI runs 38172901170, 38173972020, 38174790930 (PR #9)",
+      "runs": 3,
+      "recorded": "2026-10-11",
+      "tests": {
+        "agents/architecture-reviewer/architecture-reviewer.eval.ts > cites the DevDigest-specific rule identifier for reviewer-core violations": "pass",
+        "agents/architecture-reviewer/architecture-reviewer.eval.ts > does not fabricate a documented-rule violation for a benign rename": "pass",
+        "agents/architecture-reviewer/architecture-reviewer.eval.ts > does not fabricate an architecture finding for the out-of-scope security-shaped change": "pass",
+        "agents/architecture-reviewer/architecture-reviewer.eval.ts > flags both violations in the checkout diff with severity and a citable rule": "pass"
+      }
+    },
+    "workflow": {
+      "model": "google/gemini-2.5-flash",
+      "judge": "google/gemini-2.5-flash",
+      "source": "CI runs 38171501822, 38172256061, 38173972020, 38174790930 (PR #9)",
+      "runs": 4,
+      "recorded": "2026-10-11",
+      "tests": {
+        "workflow/review-workflow.eval.ts > architecture-review task dispatches the architecture-reviewer subagent": "flaky",
+        "workflow/review-workflow.eval.ts > docs routing · core+tests › reads reviewer-core/INSIGHTS.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · core+tests › reads TESTING.md": "flaky",
+        "workflow/review-workflow.eval.ts > docs routing · core+tests › stays read-only": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › control (no project context) does NOT read client/INSIGHTS.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › control (no project context) does NOT read client/README.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › control (no project context) does NOT read server/INSIGHTS.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › control (no project context) does NOT read server/README.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › reads client/INSIGHTS.md": "flaky",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › reads client/README.md": "flaky",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › reads server/INSIGHTS.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › reads server/README.md": "pass",
+        "workflow/review-workflow.eval.ts > docs routing · server+client › stays read-only": "pass",
+        "workflow/review-workflow.eval.ts > engineering-insights activates on a found root cause": "fail",
+        "workflow/review-workflow.eval.ts > engineering-insights does NOT activate on a plain question": "pass"
+      }
+    }
+  }
+}

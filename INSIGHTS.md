@@ -27,6 +27,26 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Doesn't Work
 
+- **2026-10-11** — An agent eval practice may only ask for what the agent's own
+  output contract promises, or no model can pass it and CI goes red for a
+  reason that looks like "cheap model": `architecture-reviewer` cases demanded
+  an "explicit PASS/FAIL gate verdict" (the template has none; `/run-plan` owns
+  the gate via `blocker|high` + confidence ≥ 0.5) and the ids
+  `reviewer-core-zero-io` / `reviewer-core-ground-findings-gate`, which exist
+  only in the cases file. Result: 0/6 locally on Haiku and 1/4 on CI
+  (gemini-2.5-flash) at `threshold: 1.0`, every failure `evidence: null` on
+  those practices. Check with `grep -rn '<id>' --exclude-dir=node_modules .`
+  before writing a practice; reworded to "attributes the finding to a rule or
+  its source doc", severities `blocker/high/medium/low/nit`, threshold 0.8.
+  `evals/agents/architecture-reviewer/architecture-reviewer.cases.ts`
+  **Then, same day** — the reworded cases went 4/4 on CI and 2/4 on the very
+  next run of identical code (gemini-2.5-flash, threshold 0.8): one green LLM-
+  judged run is not evidence, so agents are report-first in CI. One of the two
+  misses was a contradiction between practices (one allowed `low` findings,
+  the other forbade any "fabricated documented-rule violation"; the agent's
+  `low` finding cites a rule, so the judge failed it) — read the judge
+  `evidence` before blaming the model.
+
 - **2026-10-11** — A `workflow` eval cannot see two things it seems to
   measure: (a) nested `server/`, `client/`, `reviewer-core/` `CLAUDE.md` are
   injected by the harness, never `Read`, so `expectFilesRead: ["server/CLAUDE.md"]`
@@ -45,6 +65,10 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
   haiku: the same prompt dispatched once and reviewed inline once, so judge it
   with `pnpm eval:repeat -n 2` (the cap), not one run (re-checked: 2/2).
   `evals/workflow/review-workflow.cases.ts`
+  **Also on gemini-2.5-flash, 2026-10-11** — the 4-part docs-routing prompt
+  read only `server/*` and skipped parts 2–4 (4 red checks of 1–4 ms each:
+  they assert on the one shared trace). Split into two 2-part sessions; the
+  six-session cap is now exactly used, so a new session needs a dropped one.
 
 - **2026-10-11** — a "flaky regression" in an `evals/` quality case can be a
   bad fixture, not a bad skill: `dependency-checker` scored 67% vs baseline
@@ -133,6 +157,18 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-07-29** — `.gitignore` carries un-ignore rules for an `agent-runner/dist/` that does not exist yet; they are pre-staged for the Export-to-CI lesson (L06), not leftovers to clean up. Evidence: `.gitignore:3-6`, `reviewer-core/README.md:7-9`.
 
 ## Tool & Library Notes
+
+- **2026-10-11** — The first real run of `.github/workflows/evals.yml` failed
+  three ways that no local check shows, so lint it with `actionlint` and keep
+  the preflight step: (1) `${{ env.X }}` inside a job-level `env:` is rejected
+  (`Unrecognized named-value: 'env'`) — use `inputs`/`vars`/`secrets` there;
+  (2) `ghcr.io/berriai/litellm:main-stable` now exits with
+  `UnsafeMasterKeyError` unless `LITELLM_MASTER_KEY` or
+  `LITELLM_DANGEROUSLY_PERMIT_WEAK_OR_UNSET_MASTER_KEY=true` is set (floating
+  tag — it broke with no change of ours); (3) a secret holding only the 64-hex
+  part of the key (`key length=64`, no `sk-or-v1-`) gives `401 Missing
+  Authentication header`, indistinguishable from "no key" at the call site.
+  `evals/proxy/docker-compose.yml`, `.github/workflows/evals.yml`
 
 - **2026-10-11** — In the Agent SDK, `allowedTools` does not restrict
   anything under `permissionMode: "bypassPermissions"` — it only auto-approves,
