@@ -27,6 +27,25 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Doesn't Work
 
+- **2026-10-11** — A `workflow` eval cannot see two things it seems to
+  measure: (a) nested `server/`, `client/`, `reviewer-core/` `CLAUDE.md` are
+  injected by the harness, never `Read`, so `expectFilesRead: ["server/CLAUDE.md"]`
+  is red on a correct run — assert the rule they carry instead
+  (`server/INSIGHTS.md`, which "Read INSIGHTS.md first" triggers); (b) reads
+  made inside a nested subagent are not in the parent trace: one run spawned
+  the built-in `Explore` (146 tool calls) and `server/README.md` /
+  `server/INSIGHTS.md` never appeared, so a correct run looked like a skip.
+  `evals/src/runtime/run-claude.ts`, `evals/workflow/review-workflow.cases.ts`
+
+- **2026-10-11** — Do not fold dispatch or skill activation into one
+  multi-part prompt: with six numbered tasks `claude-haiku-4-5` skipped the
+  last three (no `architecture-reviewer`, no `engineering-insights`, no
+  `TESTING.md`), 8/16 checks red, while each passed alone. Only doc-reading
+  merges safely (one session + one control). Even alone, dispatch is flaky on
+  haiku: the same prompt dispatched once and reviewed inline once, so judge it
+  with `pnpm eval:repeat -n 2` (the cap), not one run (re-checked: 2/2).
+  `evals/workflow/review-workflow.cases.ts`
+
 - **2026-09-18** — `server/src/db/migrations/` cannot be trusted as ground truth for the local dev Postgres's actual schema, so don't `pnpm db:generate` there without checking first: `drizzle.__drizzle_migrations` has 17 applied rows while only 10 `.sql` files (`0000`–`0009`) exist in git, and `\d agent_runs` already shows `cost_usd`/`critical_count`/`warning_count`/`suggestion_count` — columns `server/src/db/schema/runs.ts` declares with no migration file past `0009_complex_runaways.sql` to create them. Most likely cause: commit `c6af1e4` ("revert: restore main to the starter state, homework belongs in forks") reset the migrations folder while the `devdigest_pgdata` volume — deliberately never reset, per this file's own `docker compose down -v` gotcha — kept every schema change 7 now-deleted migrations (ids 11–17) made. Generating a new migration against this drifted state risks a wrong/misleading diff; run `docker exec devdigest-postgres psql -U devdigest -d devdigest -c "\d <table>"` and compare against `schema.ts` before trusting `db:generate`'s output, and treat "columns already exist" as a signal to stop and ask, not to skip the migration.
 
 - **2026-07-29** — Editing `client/src/vendor/shared/` alone silently desyncs the client from the API: it is a hand-copy of the canonical `server/src/vendor/shared/`, there is no sync script, and it already lags in 5 files. Evidence: `diff -rq server/src/vendor/shared client/src/vendor/shared`.
@@ -79,6 +98,18 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 - **2026-07-29** — `.gitignore` carries un-ignore rules for an `agent-runner/dist/` that does not exist yet; they are pre-staged for the Export-to-CI lesson (L06), not leftovers to clean up. Evidence: `.gitignore:3-6`, `reviewer-core/README.md:7-9`.
 
 ## Tool & Library Notes
+
+- **2026-10-11** — In the Agent SDK, `allowedTools` does not restrict
+  anything under `permissionMode: "bypassPermissions"` — it only auto-approves,
+  so a "read-only allow-list" still had `Bash`/`Write`. The `tools` option is
+  the hard cap, and `runClaude` now takes it (`workflowTask` passes the
+  allow-list as `tools`). It caps built-ins only: MCP connectors stay callable
+  and a run still called `mcp__claude_ai_Claude_Docs__update`, so the
+  `expectReadOnly` check (Bash/Write/Edit/NotebookEdit) does not catch it.
+  **Fixed 2026-10-11** — a hard-capped run also passes `strictMcpConfig: true`
+  and `disallowedTools: ["mcp__*"]`, and `expectReadOnly` flags any `mcp__*`
+  call; the same activation case now traces `Skill, Read, Grep` only.
+  `evals/src/runtime/run-claude.ts`, `evals/src/dsl/case.ts`
 
 - **2026-10-04** — For agent-facing test runs, raw `pnpm test` output is the
   token sink, not test time (all four packages run in ~15 s). A blind
