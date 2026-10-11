@@ -14,6 +14,11 @@
 #                  the one that dispatches subagents; deepseek-chat does the work inline instead)
 #   judge        : EVAL_JUDGE_MODEL (default google/gemini-2.5-flash)
 # Repo variables: SKILLS_MODEL, TOOL_MODEL, EVAL_JUDGE_MODEL.
+#
+# Budget: the OpenRouter key's own limit is the hard cap. Each model job runs
+# scripts/openrouter-check.mjs first (fails below EVAL_MIN_CREDIT_USD remaining) and
+# scripts/budget-report.mjs last (step summary + warning above EVAL_JOB_BUDGET_USD).
+# Variables: EVAL_MIN_CREDIT_USD (default 1), EVAL_JOB_BUDGET_USD (default 2).
 # Secret: OPENROUTER_API_KEY (Settings → Secrets → Actions). Fork PRs get no secrets, so they are skipped.
 name: evals
 
@@ -53,6 +58,10 @@ concurrency:
 
 env:
   EVAL_BACKEND: openrouter
+  # Budget. The OpenRouter key's own spend limit is the hard cap; these are the early stops.
+  EVAL_MAX_TURNS: '8' # per case (same as the engine default, pinned so a variable cannot inflate it)
+  EVAL_MIN_CREDIT_USD: ${{ vars.EVAL_MIN_CREDIT_USD || '1' }} # preflight fails below this remaining credit
+  EVAL_JOB_BUDGET_USD: ${{ vars.EVAL_JOB_BUDGET_USD || '2' }} # per-job warning threshold
   EVAL_JUDGE_MODEL: ${{ inputs.judge_model || vars.EVAL_JUDGE_MODEL || 'google/gemini-2.5-flash' }}
   EVAL_QUIET: '1'
 
@@ -147,19 +156,8 @@ jobs:
       EVAL_MODEL: ${{ inputs.skills_model || vars.SKILLS_MODEL || 'deepseek/deepseek-chat' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check OPENROUTER_API_KEY
-        run: |
-          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
-            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
-            exit 1
-          fi
-          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
-          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
-          if [ "$code" != "200" ]; then
-            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
-            exit 1
-          fi
+      - name: Check OPENROUTER_API_KEY and credit
+        run: node scripts/openrouter-check.mjs
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
@@ -171,6 +169,9 @@ jobs:
       # Content tier talks to OpenRouter directly — no LiteLLM proxy needed.
       - name: Run skill evals
         run: pnpm vitest run "skills/${{ matrix.skill }}/" --no-file-parallelism
+      - name: Budget report
+        if: always()
+        run: node scripts/budget-report.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -198,19 +199,8 @@ jobs:
       EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check OPENROUTER_API_KEY
-        run: |
-          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
-            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
-            exit 1
-          fi
-          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
-          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
-          if [ "$code" != "200" ]; then
-            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
-            exit 1
-          fi
+      - name: Check OPENROUTER_API_KEY and credit
+        run: node scripts/openrouter-check.mjs
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
@@ -228,6 +218,9 @@ jobs:
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()
         run: docker compose -f proxy/docker-compose.yml down
+      - name: Budget report
+        if: always()
+        run: node scripts/budget-report.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -253,19 +246,8 @@ jobs:
       EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check OPENROUTER_API_KEY
-        run: |
-          if [ -z "${OPENROUTER_API_KEY//[[:space:]]/}" ]; then
-            echo "::error::OPENROUTER_API_KEY is empty or whitespace - add it as a repository secret (not a Dependabot/environment secret) in THIS repo"
-            exit 1
-          fi
-          case "$OPENROUTER_API_KEY" in sk-or-*) prefix=ok ;; *) prefix="UNEXPECTED (does not start with sk-or-)" ;; esac
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${OPENROUTER_API_KEY}" https://openrouter.ai/api/v1/auth/key || true)
-          echo "key length=${#OPENROUTER_API_KEY} prefix=${prefix} openrouter /auth/key -> HTTP ${code}"
-          if [ "$code" != "200" ]; then
-            echo "::error::OpenRouter rejected the key (HTTP ${code}); check the secret value for stray spaces/newlines or a wrong token"
-            exit 1
-          fi
+      - name: Check OPENROUTER_API_KEY and credit
+        run: node scripts/openrouter-check.mjs
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
@@ -289,6 +271,9 @@ jobs:
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()
         run: docker compose -f proxy/docker-compose.yml down
+      - name: Budget report
+        if: always()
+        run: node scripts/budget-report.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
