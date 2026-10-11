@@ -10,8 +10,9 @@
  * `outcome` is "the session did not error", not "the assertions held".
  *
  * Baseline = evals/baseline.json, committed. Per tier: the model it was measured on, where it came
- * from, and pass|fail per test (known failures are recorded as fail, so they read as "=" and an
- * improvement is visible). Only tests in files that ran in this job are compared, so a matrix job
+ * from, and per test: pass (every run passed), fail (every run failed - a known failure, so it
+ * reads as "=" and an improvement is visible) or flaky (runs disagreed - never a regression).
+ * `update --history a.jsonl,b.jsonl,c.jsonl` takes several runs; with one run nothing can be flaky. Only tests in files that ran in this job are compared, so a matrix job
  * for one skill/agent is not blamed for the others.
  *
  * Pure node, no dependencies.
@@ -65,21 +66,31 @@ const fileOf = (nodeid) => nodeid.split(" > ")[0];
 const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : { schema: 1, tiers: {} };
 
 if (mode === "update") {
-  const run = loadRun(historyFile);
-  if (!run.size) {
+  const files = historyFile.split(",").map((f) => f.trim()).filter(Boolean);
+  const runs = files.map(loadRun).filter((r) => r.size);
+  if (!runs.length) {
     console.error(`no test rows in ${historyFile}`);
     process.exit(1);
+  }
+  const outcomes = new Map();
+  for (const r of runs) for (const [k, v] of r) (outcomes.get(k) ?? outcomes.set(k, []).get(k)).push(v);
+  const tests = {};
+  for (const [k, vs] of [...outcomes].sort(([a], [b]) => a.localeCompare(b))) {
+    tests[k] = vs.every((v) => v === "pass") && vs.length === runs.length ? "pass"
+      : vs.every((v) => v === "fail") && vs.length === runs.length ? "fail"
+      : "flaky";
   }
   baseline.tiers[tier] = {
     model: flag("model", process.env.EVAL_MODEL ?? "unknown"),
     judge: process.env.EVAL_JUDGE_MODEL ?? null,
     source: flag("source", "manual"),
+    runs: runs.length,
     recorded: new Date().toISOString().slice(0, 10),
-    tests: Object.fromEntries([...run].sort(([a], [b]) => a.localeCompare(b))),
+    tests,
   };
   writeFileSync(BASELINE, JSON.stringify(baseline, null, 2) + "\n");
-  const pass = [...run.values()].filter((v) => v === "pass").length;
-  console.log(`baseline[${tier}] updated: ${pass}/${run.size} pass, model ${baseline.tiers[tier].model}`);
+  const c = (st) => Object.values(tests).filter((v) => v === st).length;
+  console.log(`baseline[${tier}] updated from ${runs.length} run(s): ${c("pass")} pass, ${c("fail")} fail, ${c("flaky")} flaky, model ${baseline.tiers[tier].model}`);
   process.exit(0);
 }
 
@@ -109,6 +120,8 @@ if (!base) {
       if (b === "pass") missing++;
     } else if (!b) {
       status = "new";
+    } else if (b === "flaky") {
+      status = "flaky";
     } else if (b === r) {
       status = "=";
     } else if (b === "pass") {
@@ -123,14 +136,15 @@ if (!base) {
   const model = process.env.EVAL_MODEL ?? "unknown";
   log(`### Baseline comparison (${tier})`);
   log();
-  log(`Baseline: \`${base.model}\` · ${base.source} · ${base.recorded}. This run: \`${model}\`.`);
+  log(`Baseline: \`${base.model}\` · ${base.source} · ${base.runs ?? 1} run(s) · ${base.recorded}. This run: \`${model}\`.`);
   if (base.model !== model) log(`> Different model from the baseline — the comparison is indicative only.`);
   log();
   log("| test | baseline | now | |");
   log("|---|---|---|---|");
   for (const x of rows) log(`| ${x.k.split(" > ").slice(1).join(" > ")} | ${x.b} | ${x.r} | ${x.status} |`);
   log();
-  log(`**${regressions} regression(s)**, ${improved} improved, ${missing} missing, ${rows.filter((x) => x.status === "=").length} unchanged.`);
+  const flaky = rows.filter((x) => x.status === "flaky").length;
+  log(`**${regressions} regression(s)**, ${improved} improved, ${missing} missing, ${flaky} flaky (not counted), ${rows.filter((x) => x.status === "=").length} unchanged.`);
   for (const x of rows.filter((y) => y.status === "REGRESSION" || (y.status === "MISSING" && y.b === "pass"))) {
     console.log(`::warning title=Eval ${x.status} (${tier})::${x.k.split(" > ").slice(1).join(" > ")}`);
   }
