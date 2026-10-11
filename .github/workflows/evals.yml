@@ -18,6 +18,9 @@
 # Repo variables: SKILLS_MODEL, AGENTS_MODEL, WORKFLOW_MODEL, EVAL_JUDGE_MODEL.
 # (TOOL_MODEL, used earlier for both tiers, is no longer read - delete it.)
 #
+# Baseline: scripts/baseline.mjs compares each tier's test results with evals/baseline.json and
+# writes the diff to the step summary (report-first; EVAL_BASELINE_STRICT=1 would make it fail).
+#
 # Gating: quality (static) and skills block; agents and the workflow tier are report-first
 # (warning + step summary) until they are stable across several runs on main.
 #
@@ -183,6 +186,9 @@ jobs:
       - name: Budget report
         if: always()
         run: node scripts/budget-report.mjs
+      - name: Baseline comparison
+        if: always()
+        run: node scripts/baseline.mjs compare skills
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -241,6 +247,9 @@ jobs:
       - name: Budget report
         if: always()
         run: node scripts/budget-report.mjs
+      - name: Baseline comparison
+        if: always()
+        run: node scripts/baseline.mjs compare agents
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -294,6 +303,9 @@ jobs:
       - name: Budget report
         if: always()
         run: node scripts/budget-report.mjs
+      - name: Baseline comparison
+        if: always()
+        run: node scripts/baseline.mjs compare workflow
       - uses: actions/upload-artifact@v4
         if: always()
         with:

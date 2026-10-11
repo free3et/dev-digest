@@ -52,6 +52,10 @@ Notes: `eval:repeat` is capped at 2 runs. Practices must stay inside the
 artifact's own output contract, or no model can pass them (see root
 `INSIGHTS.md`). CI runs model evals on OpenRouter under a spend budget;
 locally they use the Claude Code subscription.
+After re-calibrating, refresh `evals/baseline.json` with
+`pnpm eval:baseline update <skills|agents|workflow> --history <history.jsonl>
+--model <slug> --source <text>`; CI diffs every model run against it
+(report-first, in the step summary).
 
 ## Stack
 
