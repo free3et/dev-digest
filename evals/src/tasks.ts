@@ -48,9 +48,12 @@ export function agentTask(prompt: string, agentName: string, opts: RunOptions = 
  * with bypassPermissions could otherwise take real actions in the repo.
  */
 export function workflowTask(prompt: string, opts: RunOptions = {}) {
+  const allowedTools = opts.allowedTools ?? WORKFLOW_ALLOWED_TOOLS;
   return runClaude(prompt, {
-    allowedTools: WORKFLOW_ALLOWED_TOOLS,
     ...opts,
+    allowedTools,
+    // Same list as a hard cap: Bash/Write/Edit don't exist in the session, not merely unapproved.
+    tools: allowedTools,
     settingSources: ["project"],
   });
 }

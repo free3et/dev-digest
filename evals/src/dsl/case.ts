@@ -55,6 +55,22 @@ export type WorkflowCase =
       maxTurns?: number;
     }
   | {
+      // ONE real session, MANY independently-reported checks. Unlike `trace` (one test that dies
+      // at its first failed expect), each expectation becomes its own vitest test over the shared
+      // trace, so a red run says exactly which facet broke. `control: true` adds ONE control
+      // session (empty tmpdir, no project config) with the same prompt and asserts it read none
+      // of `expectFilesRead`.
+      kind: "session";
+      name: string;
+      prompt: string;
+      expectSubagents?: string[];
+      expectSkills?: string[];
+      expectFilesRead?: string[];
+      control?: boolean;
+      tools?: string[];
+      maxTurns?: number;
+    }
+  | {
       // A single-session composite: run ONE workflowTask and assert several trace facets at once.
       // Cheaper than separate dispatch/activation/contrast cases (one session, not N) at the cost
       // of coarser diagnostics and no control run — use contrast when you must isolate CLAUDE.md's
@@ -73,6 +89,14 @@ export function activated(result: Result, skill: string): boolean {
   const bySkill = result.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`));
   const byRead = result.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`));
   return bySkill || byRead;
+}
+
+/** Tools a read-only workflow session must never have called (proof the allow-list held). */
+const MUTATING_TOOLS = ["Bash", "Write", "Edit", "NotebookEdit"];
+
+function expectReadOnly(result: Result, label = ""): void {
+  const used = result.toolsUsed.filter((t) => MUTATING_TOOLS.includes(t) || t.startsWith("mcp__"));
+  expect(used, `${label}mutating tools used: ${used.join(", ")}`).toEqual([]);
 }
 
 // --- Runners ----------------------------------------------------------------
@@ -115,8 +139,95 @@ function runQualityCases(artifact: string, cases: QualityCase[], task: Task): vo
 export const runSkillCases = (skill: string, cases: SkillCase[]) => runQualityCases(skill, cases, skillTask);
 export const runAgentCases = (agent: string, cases: AgentCase[]) => runQualityCases(agent, cases, agentTask);
 
+type SessionCase = Extract<WorkflowCase, { kind: "session" }>;
+
+const engagedIn = (p: { skillsInvoked: string[]; filesRead: string[] }, skill: string) =>
+  p.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`)) ||
+  p.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`));
+
+/** One lazily-run session (shared by every check below it) + one test per expectation. */
+function registerSession(c: SessionCase): void {
+  const subs = c.expectSubagents ?? [];
+  const skls = c.expectSkills ?? [];
+  const files = c.expectFilesRead ?? [];
+  const tools = c.tools ?? ["Read", "Grep", "Glob", "Agent", "Skill"];
+  let treatment: Promise<Result> | undefined;
+  let control: Promise<Result> | undefined;
+
+  const runTreatment = () =>
+    (treatment ??= workflowTask(c.prompt, {
+      allowedTools: tools,
+      maxTurns: c.maxTurns,
+      // Stop once every expectation is met — don't pay for the nested subagent's full run.
+      stopWhen: (p) =>
+        subs.every((s) => p.subagents.includes(s)) &&
+        skls.every((s) => engagedIn(p, s)) &&
+        files.every((f) => p.filesRead.some((r) => r.includes(f))),
+    }).then((r) => {
+      logTrace(`${c.name} [treatment]`, r);
+      record(`${c.name} [treatment]`, { result: r });
+      return r;
+    }));
+
+  const runControl = () =>
+    (control ??= runClaude(c.prompt, {
+      allowedTools: ["Read", "Grep", "Glob"],
+      tools: ["Read", "Grep", "Glob"],
+      maxTurns: c.maxTurns,
+      cwd: mkdtempSync(join(tmpdir(), "eval-control-")),
+      settingSources: [],
+    }).then((r) => {
+      logTrace(`${c.name} [control]`, r);
+      record(`${c.name} [control]`, { result: r });
+      return r;
+    }));
+
+  for (const sub of subs) {
+    test(`${c.name} › dispatches ${sub}`, async () => {
+      const r = await runTreatment();
+      expect(r.subagents, `subagents: ${r.subagents.join(", ")}`).toContain(sub);
+    });
+  }
+  for (const skill of skls) {
+    test(`${c.name} › activates ${skill}`, async () => {
+      const r = await runTreatment();
+      expect(
+        activated(r, skill),
+        `skills: ${r.skillsInvoked.join(", ")} | reads: ${r.filesRead.join(", ")}`,
+      ).toBe(true);
+    });
+  }
+  for (const file of files) {
+    test(`${c.name} › reads ${file}`, async () => {
+      const r = await runTreatment();
+      expect(
+        r.filesRead.some((f) => f.includes(file)),
+        `reads: ${r.filesRead.join(", ")}`,
+      ).toBe(true);
+    });
+  }
+  test(`${c.name} › stays read-only`, async () => {
+    expectReadOnly(await runTreatment());
+  });
+  if (c.control) {
+    for (const file of files) {
+      test(`${c.name} › control (no project context) does NOT read ${file}`, async () => {
+        const r = await runControl();
+        expect(
+          r.filesRead.some((f) => f.includes(file)),
+          `control reads: ${r.filesRead.join(", ")}`,
+        ).toBe(false);
+      });
+    }
+  }
+}
+
 export function runWorkflowCases(cases: WorkflowCase[]): void {
   for (const c of cases) {
+    if (c.kind === "session") {
+      registerSession(c);
+      continue;
+    }
     test(c.name, async () => {
       if (c.kind === "dispatch") {
         // Stop the moment the subagent is launched — no need to wait out its nested session.
@@ -128,6 +239,7 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         logTrace(c.name, result);
         try {
           expect(result.subagents, `subagents: ${result.subagents.join(", ")}`).toContain(c.expectSubagent);
+          expectReadOnly(result);
         } finally {
           record(c.name, { result });
         }
@@ -139,6 +251,7 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
             activated(result, c.skill),
             `skills: ${result.skillsInvoked.join(", ")} | reads: ${result.filesRead.join(", ")}`,
           ).toBe(c.shouldActivate);
+          expectReadOnly(result);
         } finally {
           record(c.name, { result });
         }
@@ -187,6 +300,7 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         const emptyCwd = mkdtempSync(join(tmpdir(), "eval-control-"));
         const control = await runClaude(c.prompt, {
           allowedTools: tools,
+          tools,
           maxTurns: c.maxTurns,
           cwd: emptyCwd,
           settingSources: [],
@@ -198,6 +312,8 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
           const controlRead = control.filesRead.some((f) => f.includes(c.expectFileRead));
           expect(treatmentRead, `treatment reads: ${treatment.filesRead.join(", ")}`).toBe(true);
           expect(controlRead, `control reads: ${control.filesRead.join(", ")}`).toBe(false);
+          expectReadOnly(treatment, "treatment: ");
+          expectReadOnly(control, "control: ");
         } finally {
           record(`${c.name} [treatment]`, { result: treatment });
           record(`${c.name} [control]`, { result: control });

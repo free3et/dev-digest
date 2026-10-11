@@ -31,6 +31,12 @@ export interface Result {
 export interface RunOptions {
   systemPrompt?: string;
   allowedTools?: string[];
+  /**
+   * Hard cap on the built-in tools that EXIST in the session. `allowedTools` alone only
+   * auto-approves; under bypassPermissions Bash/Write stay callable. Set this to make a
+   * read-only allow-list actually read-only. Omit to leave the default tool set untouched.
+   */
+  tools?: string[];
   maxTurns?: number;
   cwd?: string;
   model?: string;
@@ -65,6 +71,11 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     permissionMode: "bypassPermissions", // safe: evals only read/plan and tools are allow-listed
     systemPrompt,
     allowedTools,
+    // `tools` caps built-ins only; MCP connectors (e.g. claude.ai Docs) would stay callable, so a
+    // hard-capped session also ignores every MCP config and denies `mcp__*`.
+    ...(opts.tools
+      ? { tools: opts.tools, strictMcpConfig: true, disallowedTools: ["mcp__*"] }
+      : {}),
     cwd: opts.cwd ?? REPO_ROOT,
     // Default: do NOT load on-disk config — isolates the injected artifact. workflowTask overrides.
     settingSources: opts.settingSources ?? [],
