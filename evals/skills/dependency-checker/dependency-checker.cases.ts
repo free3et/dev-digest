@@ -29,12 +29,12 @@ client/node_modules/zod: 1.9M
 reviewer-core/node_modules/zod: 2.1M
 e2e/node_modules/playwright: 210M
 
-server/package.json also declares zod@3.23.8, client/package.json declares zod@3.22.4, reviewer-core/package.json declares zod@3.23.8 — three different resolved zod versions across packages.
+zod is declared on two different versions across packages: 3.23.8 in server and reviewer-core, 3.22.4 in client.
 
 grep for imports crossing package boundaries:
-- server/src/routes/reviews.ts imports types from "@shared/review-types" (alias to server/src/vendor/shared)
+- server/src/routes/reviews.ts imports types from "@devdigest/shared" (tsconfig path alias to server/src/vendor/shared)
 - server/src/services/review-service.ts imports "reviewer-core/src/pipeline.js" directly by relative path (not via the package's public entry point)
-- client/src/lib/api-types.ts imports "@shared/review-types" (same alias as server)
+- client/src/lib/api-types.ts imports "@devdigest/shared" (same alias as server)
 - grep found no import of "moment" anywhere under server/src — only present in package.json`;
 
 export const cases: SkillCase[] = [
@@ -59,7 +59,7 @@ export const cases: SkillCase[] = [
     kind: "quality",
     prompt: `This repo isn't a monorepo — server, client, reviewer-core, and e2e share code via TypeScript path aliases, not workspace:* packages. Analyze our dependencies, including how these packages depend on each other internally.\n\n${REPO_DATA}`,
     practices: [
-      "the answer explicitly distinguishes internal cross-package dependencies (the @shared/review-types alias and the direct relative import into reviewer-core/src/pipeline.js) from external npm package dependencies, rather than treating them as the same kind of dependency",
+      "the answer explicitly distinguishes internal cross-package dependencies (the @devdigest/shared path alias and the direct relative import into reviewer-core/src/pipeline.js) from external npm package dependencies, rather than treating them as the same kind of dependency",
       "the answer flags server/src/services/review-service.ts importing reviewer-core/src/pipeline.js by relative path instead of through reviewer-core's public entry point as a P0-tier or otherwise explicitly called-out issue",
       "the answer does not claim these packages are linked via workspace:* or pnpm workspaces, since the project explicitly is not a monorepo",
     ],
@@ -72,7 +72,7 @@ export const cases: SkillCase[] = [
     prompt: `We suspect some npm dependencies in server/ and client/ are unused or duplicated across packages with different versions. Check our dependencies and tell me what to prioritize fixing first.\n\n${REPO_DATA}`,
     practices: [
       "findings are explicitly labeled with one of the defined severity tiers (P0, P1, P2, or Info) rather than left unranked",
-      "the three different zod versions across server, client, and reviewer-core are called out explicitly as version drift",
+      "zod being declared at different versions (3.22.4 in client vs 3.23.8 in server and reviewer-core) is called out explicitly as version drift",
       "moment being declared in server/package.json but never imported anywhere under server/src is called out explicitly as an unused dependency",
       "each recommendation names a specific package name and package.json/file location (e.g. server/package.json, moment, zod) rather than a generic suggestion",
       "removing a dependency (e.g. moment) is presented as a recommendation for the user to confirm, not something already executed",
