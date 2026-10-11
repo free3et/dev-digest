@@ -53,8 +53,6 @@ concurrency:
 
 env:
   EVAL_BACKEND: openrouter
-  SKILLS_MODEL: ${{ inputs.skills_model || vars.SKILLS_MODEL || 'deepseek/deepseek-chat' }}
-  TOOL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
   EVAL_JUDGE_MODEL: ${{ inputs.judge_model || vars.EVAL_JUDGE_MODEL || 'google/gemini-2.5-flash' }}
   EVAL_QUIET: '1'
 
@@ -146,7 +144,7 @@ jobs:
         working-directory: evals
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      EVAL_MODEL: ${{ env.SKILLS_MODEL }}
+      EVAL_MODEL: ${{ inputs.skills_model || vars.SKILLS_MODEL || 'deepseek/deepseek-chat' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -184,7 +182,7 @@ jobs:
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ env.TOOL_MODEL }}
+      EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -226,7 +224,7 @@ jobs:
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ env.TOOL_MODEL }}
+      EVAL_MODEL: ${{ inputs.tool_model || vars.TOOL_MODEL || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
