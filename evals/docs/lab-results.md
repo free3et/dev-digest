@@ -56,14 +56,35 @@ costs about $0.2–0.4.
 
 ## 4. Baseline comparison
 
-`evals/baseline.json` holds the pass/fail of every test per tier, taken from the CI runs above
-(skills: run 38171501822, agents: 38173972020, workflow: 38173972020, which includes the known
-failing `engineering-insights activates…`). CI runs `scripts/baseline.mjs compare <tier>` after each
-model job and writes regressions / improvements to the step summary. It is report-first; set
-`EVAL_BASELINE_STRICT=1` to make a regression fail the job.
+`evals/baseline.json` holds, per tier, the model it was measured on and per test one of `pass`
+(every baseline run passed), `fail` (every run failed - a known failure) or `flaky` (runs disagreed).
+It is built from several CI runs, not one:
 
-Refresh after a deliberate change: run the tier, then
-`pnpm eval:baseline update <tier> --history results/history.jsonl --model <slug> --source "<run>"`.
+| tier | model | baseline runs | pass / fail / flaky |
+|---|---|---|---|
+| skills | `deepseek/deepseek-chat` | 2 (38170824386, 38171501822) | 3 / 0 / 0 |
+| agents | `anthropic/claude-haiku-5.5` | 3 (38172901170, 38173972020, 38174790930) | 4 / 0 / 0 |
+| workflow | `google/gemini-2.5-flash` | 4 (38171501822, 38172256061, 38173972020, 38174790930) | 10 / 1 / 4 |
+
+A single-run baseline was tried first and raised four false "regressions" on the next run, so
+`flaky` exists for a reason. The workflow tier on gemini, same code, per run (P pass / F fail):
+
+| test | 71501822 | 72256061 | 73972020 | 74790930 |
+|---|---|---|---|---|
+| reads `server/INSIGHTS.md`, `server/README.md`, `reviewer-core/INSIGHTS.md` | P | P | P | P |
+| reads `client/INSIGHTS.md`, `client/README.md` | F | P | P | F |
+| reads `TESTING.md` | P | F | P | F |
+| dispatches `architecture-reviewer` | P | P | P | F |
+| `engineering-insights` activates on a root cause | F | F | F | F |
+| controls, read-only checks, negative activation | P | P | P | P |
+
+CI runs `scripts/baseline.mjs compare <tier>` after each model job: regressions, improvements and
+missing tests go to the step summary, regressions also as `::warning`. It is report-first; set
+`EVAL_BASELINE_STRICT=1` to make a regression fail the job. Only files that ran are compared, and a
+different model than the baseline's is flagged as indicative.
+
+Refresh after a deliberate change (comma-separate several runs; use history files from the run
+artifacts): `pnpm eval:baseline update <tier> --history a.jsonl,b.jsonl --model <slug> --source "<runs>"`.
 
 ## 5. What this does not prove
 
@@ -71,5 +92,5 @@ Refresh after a deliberate change: run the tier, then
 - Agent version comparison needs a new series on the corrected cases; at n=2 per label it shows
   direction, not significance.
 - Single CI runs are single points: gemini went 4/4 and then 2/4 on identical code.
-- The baseline is as good as the runs it was taken from (one run per tier); refresh it as evidence
-  accumulates.
+- The baseline is as good as the runs it was taken from (2-4 per tier); `flaky` marks only what
+  those runs happened to show, so refresh it as evidence accumulates.
