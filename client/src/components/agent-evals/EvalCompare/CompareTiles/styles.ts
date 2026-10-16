@@ -16,7 +16,8 @@ export const s = {
   label: EVAL_CAPTION_STYLE as CSSProperties,
   values: { fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" } satisfies CSSProperties,
   delta: { fontSize: 12.5, whiteSpace: "nowrap" } satisfies CSSProperties,
-  up: { color: "var(--ok, #2ea043)" } satisfies CSSProperties,
-  down: { color: "var(--crit, #f85149)" } satisfies CSSProperties,
+  /* Cost: a higher bill is the bad direction, a lower one the good one. */
+  up: { color: "var(--crit, #f85149)" } satisfies CSSProperties,
+  down: { color: "var(--ok, #2ea043)" } satisfies CSSProperties,
   flat: { color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

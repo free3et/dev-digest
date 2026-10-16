@@ -236,6 +236,8 @@ describe("EvalCompare", () => {
     await screen.findByRole("group", { name: "Metric comparison" });
     expect(cost()).toHaveTextContent("$0.04 → $0.06");
     expect(cost()).toHaveTextContent("▲ +$0.02");
+    // a higher bill is the bad direction: critical colour, not the "ok" green
+    expect(within(cost()).getByText("▲ +$0.02").getAttribute("style")).toContain("--crit");
     cleanup();
 
     stub({
