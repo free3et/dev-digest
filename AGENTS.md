@@ -10,6 +10,21 @@ Order: `<module>/specs/` (what we intend to build) → `<module>/docs/` (how it
 works) → `<module>/INSIGHTS.md` (what we already tried and rejected) → source.
 If a curated file answers the question, cite it instead of re-deriving from code.
 
+**Your first tool calls are `Read`s of the docs below, before opening any source
+file. Find the row for the package the task touches and read both columns.** If
+the task spans several packages, do every matching row. State in one line what
+you read and whether it was relevant.
+
+| The task touches | First `Read` | Then `Read` |
+| ---------------- | ------------ | ----------- |
+| `server/**` | `server/INSIGHTS.md` | `server/README.md` |
+| `client/**` | `client/INSIGHTS.md` | `client/README.md` |
+| `reviewer-core/**` | `reviewer-core/INSIGHTS.md` | `reviewer-core/README.md` |
+| `e2e/**` | `e2e/INSIGHTS.md` | `e2e/README.md` |
+| `devdigest-mcp/**` | `devdigest-mcp/INSIGHTS.md` | — |
+| adding or changing a test (any package) | — | `TESTING.md` |
+| two or more packages, or root files | `INSIGHTS.md` (root) + each row above | — |
+
 ## After finishing
 
 Run the `engineering-insights` skill at the end of any non-trivial task. It

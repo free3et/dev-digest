@@ -12,6 +12,8 @@ export interface DiffFindingApi {
   pendingFindingId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Agent whose review produced a finding (enables the eval-case control). */
+  agentIdFor?: (findingId: string) => string | null | undefined;
 }
 
 /** Findings anchor on the new-file side (RIGHT) at their start line. */

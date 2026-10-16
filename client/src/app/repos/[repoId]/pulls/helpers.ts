@@ -31,6 +31,13 @@ export function latestFindingsPerAgent(reviews: ReviewRecord[]): FindingRecord[]
   return findings.sort((a, b) => rank(a.severity) - rank(b.severity));
 }
 
+/** finding id → the agent of the review it belongs to (null: review has none). */
+export function findingAgentIds(reviews: ReviewRecord[]): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const rv of reviews) for (const f of rv.findings) out.set(f.id, rv.agent_id);
+  return out;
+}
+
 /** Bucket a PR into S/M/L by total changed lines. */
 export function sizeOf(pr: PrMeta): SizeInfo {
   const lines = pr.additions + pr.deletions;

@@ -2,6 +2,10 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
+// Pin the zone before any worker starts: local-time formatting (formatRanAtLocal)
+// must be deterministic. Non-UTC cases pass `timeZone` explicitly.
+process.env.TZ = "UTC";
+
 export default defineConfig({
   plugins: [react()],
   resolve: {

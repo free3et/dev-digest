@@ -1,0 +1,153 @@
+{
+  "skill": "onion-architecture",
+  "fixtures_root": "fixtures",
+  "findings": [
+    {
+      "id": "digests-route-queries-db",
+      "file": "server/src/modules/digests/routes.ts",
+      "rule": "drizzle-only-in-repository",
+      "ring": "4 transport",
+      "summary": "The GET /repos/:id/digests handler imports drizzle-orm and the db schema and builds the query inside the route.",
+      "fix": "Move the query into DigestsRepository and call it through DigestsService; the handler only validates, calls the service and returns."
+    },
+    {
+      "id": "digests-service-constructs-adapter",
+      "file": "server/src/modules/digests/service.ts",
+      "rule": "port-adapter-container",
+      "ring": "2 application",
+      "summary": "The service imports OctokitGitHubClient and builds it with `new` instead of using the GitHub client provided by the container.",
+      "fix": "Use container.github (the GitHubClient port); the concrete adapter is bound only in platform/container.ts."
+    },
+    {
+      "id": "digests-writes-without-transaction",
+      "file": "server/src/modules/digests/service.ts",
+      "rule": "service-owns-transaction",
+      "ring": "2 application",
+      "summary": "createWeeklyDigest performs three dependent writes (insertDigest, insertDigestItems, markPullsDigested) with no transaction.",
+      "fix": "The service opens db.transaction and passes tx to the repository methods; the GitHub call stays outside the transaction."
+    },
+    {
+      "id": "risk-service-imports-other-module",
+      "file": "server/src/modules/risk/service.ts",
+      "rule": "no-cross-module-internals",
+      "ring": "2 application",
+      "summary": "The service imports ReviewRepository and pickLatestRunPerAgent from ../reviews/ (another module's repository and helpers).",
+      "fix": "Share through the container (container.reviewRepo); duplicate the small pure helper on purpose instead of importing it."
+    },
+    {
+      "id": "risk-engine-does-io",
+      "file": "reviewer-core/src/risk.ts",
+      "rule": "reviewer-core-no-io",
+      "ring": "1-2 engine",
+      "summary": "scoreRisk reads config/risk-weights.json with node:fs and process.cwd(); the engine must have no filesystem access.",
+      "fix": "Pass the weights in as an argument; the server loads them and hands them to the engine."
+    },
+    {
+      "id": "risk-service-adhoc-external-call",
+      "file": "server/src/modules/risk/service.ts",
+      "rule": "port-adapter-container",
+      "ring": "2 application",
+      "summary": "The service calls the Slack webhook with fetch and process.env.SLACK_WEBHOOK_URL: a new external call with no port, adapter, mock or container binding, and a secret read from env instead of SecretsProvider.",
+      "fix": "Add a port in @devdigest/shared, an adapter in src/adapters/, a mock in mocks.ts and bind it in container.ts; read the URL through SecretsProvider."
+    },
+    {
+      "id": "exports-service-uses-drizzle",
+      "file": "server/src/modules/exports/service.ts",
+      "rule": "drizzle-only-in-repository",
+      "ring": "2 application",
+      "summary": "The service imports drizzle-orm operators and the db schema and composes the where clause on a query builder returned by the repository.",
+      "fix": "Move the query into the repository as one method that takes plain values and returns plain rows."
+    },
+    {
+      "id": "exports-repository-own-transaction",
+      "file": "server/src/modules/exports/repository.ts",
+      "rule": "service-owns-transaction",
+      "ring": "3 infrastructure",
+      "summary": "ExportsRepository.recordExport opens its own db.transaction while the use case continues with a second write through container.reviewRepo.markFindingsExported, so the two writes can never share one transaction.",
+      "fix": "The service opens db.transaction and passes tx to recordExport and to the second repository's method; repository methods accept an optional tx."
+    },
+    {
+      "id": "e2e-imports-server-source",
+      "file": "e2e/lib/export-expectations.ts",
+      "rule": "e2e-outside-rings",
+      "ring": "outside",
+      "summary": "The e2e helper imports toCsv from server/src/modules/exports/helpers.js; e2e is black-box and must never import server or client source.",
+      "fix": "Assert against a literal expected value or an e2e-owned formatter."
+    },
+    {
+      "id": "notifications-imports-orchestrator",
+      "file": "server/src/modules/notifications/service.ts",
+      "rule": "module-folder-private",
+      "ring": "2 application",
+      "skill_coverage": "v1.0.0 names only service/repository/routes/helpers; v1.2.0 names run-executor explicitly",
+      "summary": "The service imports buildRunSummary from ../reviews/run-executor.js, another module's orchestrator.",
+      "fix": "Do not import it; read the run through container.reviewRepo and build the summary string in notifications/helpers.ts (duplicate the small pure mapper on purpose)."
+    },
+    {
+      "id": "notifications-imports-foreign-schema",
+      "file": "server/src/modules/notifications/routes.ts",
+      "rule": "module-folder-private",
+      "ring": "4 transport",
+      "skill_coverage": "v1.0.0 does not name schemas.ts; v1.2.0 does",
+      "summary": "The route imports AgentIdParams from ../agents/schemas.js, another module's route schema file.",
+      "fix": "Use the shared params schema from _shared/schemas.ts (IdParams) or a schema from @devdigest/shared."
+    },
+    {
+      "id": "notifications-imports-foreign-barrel",
+      "file": "server/src/modules/notifications/helpers.ts",
+      "rule": "module-folder-private",
+      "ring": "1 domain",
+      "skill_coverage": "v1.0.0 does not name index.ts barrels; v1.2.0 does",
+      "summary": "The helper imports SKILL_PRIORITY_ORDER from ../skills/index.js, a barrel that also re-exports the skills repository and service.",
+      "fix": "Import from ../skills/constants.js at most, or pass the order in as an argument; a ring-1 helper must not pull a module barrel."
+    },
+    {
+      "id": "triage-write-escapes-transaction",
+      "file": "server/src/modules/triage/service.ts",
+      "rule": "every-write-receives-tx",
+      "ring": "2 application",
+      "skill_coverage": "v1.0.0 implies it; v1.2.0 has an explicit rule and checklist item",
+      "summary": "Inside db.transaction the insertAudit call is made without tx, so the audit row is written outside the transaction and is not rolled back.",
+      "fix": "Pass tx to insertAudit as to the other two repository calls."
+    },
+    {
+      "id": "triage-helper-reaches-io-adapter",
+      "file": "server/src/modules/triage/helpers.ts",
+      "rule": "ring1-no-io",
+      "ring": "1 domain",
+      "skill_coverage": "both versions",
+      "summary": "The pure helper planTriage calls loadTriagePolicy from an adapter that reads a file with node:fs on every call.",
+      "fix": "Take the policy as a parameter; the service gets it from an injected provider."
+    },
+    {
+      "id": "engine-constructs-provider",
+      "file": "reviewer-core/src/review/pick-provider.ts",
+      "rule": "engine-injected-provider",
+      "ring": "1-2 engine",
+      "skill_coverage": "both versions",
+      "summary": "The engine builds a concrete OpenRouterProvider and reads OPENROUTER_API_KEY from process.env instead of receiving an injected LLMProvider.",
+      "fix": "Accept an LLMProvider from the caller; the server binds the concrete provider."
+    }
+  ],
+  "must_not_flag": [
+    "server/src/platform/container.ts",
+    "server/src/platform/errors.ts",
+    "server/src/modules/digests/helpers.ts",
+    "server/src/modules/digests/constants.ts",
+    "server/src/modules/digests/repository.ts",
+    "server/src/modules/risk/constants.ts",
+    "server/src/modules/exports/helpers.ts",
+    "server/src/modules/risk/routes.ts",
+    "server/src/modules/triage/hunks.ts",
+    "server/src/adapters/git/parse-hunks.ts",
+    "server/src/adapters/policy/file-policy.ts",
+    "server/src/modules/triage/repository.ts",
+    "server/src/modules/triage/constants.ts",
+    "server/src/modules/notifications/repository.ts",
+    "server/src/modules/notifications/constants.ts",
+    "server/src/modules/reviews/run-executor.ts",
+    "server/src/modules/agents/schemas.ts",
+    "server/src/modules/skills/index.ts",
+    "server/src/modules/skills/constants.ts"
+  ]
+}

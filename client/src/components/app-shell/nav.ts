@@ -42,6 +42,23 @@ export function registerConventionsNav(): void {
   });
 }
 
+/** Eval Dashboard sits in SKILLS LAB right after Agents (Skills, Agents, Eval Dashboard, Conventions). Idempotent. */
+export function registerEvalDashboardNav(): void {
+  registerSkillsNav();
+  const lab = NAV.find((g) => g.section === SKILLS_LAB_SECTION);
+  if (!lab || lab.items.some((it) => it.key === "eval")) return;
+  const afterAgents = lab.items.findIndex((it) => it.key === "agents");
+  const afterSkills = lab.items.findIndex((it) => it.key === "skills");
+  const at = afterAgents >= 0 ? afterAgents + 1 : afterSkills >= 0 ? afterSkills + 1 : lab.items.length;
+  lab.items.splice(at, 0, {
+    key: "eval",
+    label: "Eval Dashboard",
+    icon: "FlaskConical",
+    href: "/eval",
+    gKey: "e",
+  });
+}
+
 /** Project Context sits in WORKSPACE right after Pull Requests. Idempotent. */
 export function registerContextNav(): void {
   const workspace = NAV.find((g) => g.section === WORKSPACE_SECTION);
@@ -57,5 +74,6 @@ export function registerContextNav(): void {
 
 registerSkillsNav();
 registerAgentsInSkillsLab();
+registerEvalDashboardNav();
 registerConventionsNav();
 registerContextNav();

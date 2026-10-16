@@ -68,6 +68,8 @@ No `chat`, no model key.
 ```sh
 # per package
 cd client        && pnpm test           # + pnpm typecheck
+# (client tests run with TZ=UTC, pinned in client/vitest.config.ts; a non-UTC case must pass `timeZone` explicitly to `formatRanAtLocal`)
+# (client charts: mock recharts `ResponsiveContainer` to a fixed size, jsdom measures 0x0; test tooltips by rendering the content component directly)
 cd reviewer-core && npm test
 cd devdigest-mcp && npm run typecheck && npm test
 

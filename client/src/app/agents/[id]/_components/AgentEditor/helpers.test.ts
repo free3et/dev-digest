@@ -3,9 +3,10 @@ import { TABS } from "./constants";
 import { parseAgentTab } from "./helpers";
 
 describe("parseAgentTab", () => {
-  it("accepts every tab the editor renders, including context", () => {
+  it("accepts every tab the editor renders, including context and evals", () => {
     for (const tab of TABS) expect(parseAgentTab(tab.key)).toBe(tab.key);
     expect(parseAgentTab("context")).toBe("context");
+    expect(parseAgentTab("evals")).toBe("evals");
   });
 
   it("falls back to config for a missing or unknown value", () => {

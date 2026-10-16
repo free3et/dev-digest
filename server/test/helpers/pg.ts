@@ -19,7 +19,14 @@ export interface PgFixture {
 
 let dockerCache: boolean | undefined;
 
-/** Cheap check: can we reach a Docker daemon? */
+/**
+ * Cheap check: can we reach a Docker daemon?
+ *
+ * With `DEVDIGEST_REQUIRE_DOCKER` set (`pnpm verify:l06`) an unreachable daemon
+ * THROWS instead of returning false, so the it-files' top-level await fails the
+ * run rather than skipping silently. Never change `HOME` to dodge a real key:
+ * `docker info` breaks without it (server INSIGHTS 2026-09-25).
+ */
 export async function dockerAvailable(): Promise<boolean> {
   if (dockerCache !== undefined) return dockerCache;
   try {
@@ -28,6 +35,9 @@ export async function dockerAvailable(): Promise<boolean> {
     dockerCache = true;
   } catch {
     dockerCache = false;
+  }
+  if (!dockerCache && process.env.DEVDIGEST_REQUIRE_DOCKER) {
+    throw new Error('verify:l06 requires Docker (docker info failed)');
   }
   return dockerCache;
 }

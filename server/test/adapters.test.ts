@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { Review } from '@devdigest/shared';
 import {
   MockLLMProvider,
@@ -103,5 +104,71 @@ describe('pricing / cost discipline', () => {
   it('estimates cost for known models and returns null for unknown', () => {
     expect(estimateCost('gpt-4o-mini', 1_000_000, 0)).toBeCloseTo(0.15, 5);
     expect(estimateCost('some-future-model', 1000, 1000)).toBeNull();
+  });
+});
+
+describe('MockLLMProvider scripted mode (structuredFn)', () => {
+  const Answer = z.object({ answer: z.string() });
+  const req = (system: string) => ({
+    model: 'm',
+    schema: Answer,
+    schemaName: 'Answer',
+    messages: [{ role: 'system' as const, content: system }],
+  });
+
+  it('answers per request, validates the result and records the call', async () => {
+    const llm = new MockLLMProvider('openai', {
+      structuredFn: (r) => ({
+        answer: (r.messages as { content: string }[])[0]!.content === 'v1' ? 'old' : 'new',
+      }),
+    });
+    expect((await llm.completeStructured(req('v1'))).data.answer).toBe('old');
+    expect((await llm.completeStructured(req('v2'))).data.answer).toBe('new');
+    expect(llm.calls.filter((c) => c.method === 'completeStructured')).toHaveLength(2);
+  });
+
+  it('supports an async function and takes precedence over structured fixtures', async () => {
+    const llm = new MockLLMProvider('openai', {
+      structured: { answer: 'fixture' },
+      structuredBySchema: { Answer: { answer: 'by-schema' } },
+      structuredFn: async () => ({ answer: 'scripted' }),
+    });
+    expect((await llm.completeStructured(req('x'))).data.answer).toBe('scripted');
+  });
+
+  it('a throw rejects the call and is still recorded', async () => {
+    const llm = new MockLLMProvider('openai', {
+      structuredFn: () => {
+        throw new Error('provider exploded');
+      },
+    });
+    await expect(llm.completeStructured(req('x'))).rejects.toThrow('provider exploded');
+    expect(llm.calls).toHaveLength(1);
+  });
+
+  it('a never-resolving function hangs the call', async () => {
+    const llm = new MockLLMProvider('openai', { structuredFn: () => new Promise(() => {}) });
+    const outcome = await Promise.race([
+      llm.completeStructured(req('x')).then(() => 'settled'),
+      new Promise((r) => setTimeout(() => r('hung'), 30)),
+    ]);
+    expect(outcome).toBe('hung');
+  });
+
+  it('a result that fails the schema still throws the fixture error', async () => {
+    const llm = new MockLLMProvider('openai', { structuredFn: () => ({ nope: 1 }) });
+    await expect(llm.completeStructured(req('x'))).rejects.toThrow('fixture failed schema');
+  });
+
+  it('accepts the openrouter id and reports it as the model provider', async () => {
+    const llm = new MockLLMProvider('openrouter');
+    expect(llm.id).toBe('openrouter');
+    expect((await llm.listModels())[0]!.provider).toBe('openrouter');
+  });
+
+  it('default behaviour is unchanged without structuredFn', async () => {
+    const llm = new MockLLMProvider('anthropic', { structured: { answer: 'plain' } });
+    expect((await llm.completeStructured(req('x'))).data.answer).toBe('plain');
+    expect((await llm.listModels())[0]!.provider).toBe('anthropic');
   });
 });

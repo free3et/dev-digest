@@ -19,3 +19,6 @@ export type PrCommitRow = typeof t.prCommits.$inferSelect;
 export type AgentRunRow = typeof t.agentRuns.$inferSelect;
 export type SkillRow = typeof t.skills.$inferSelect;
 export type ConventionRow = typeof t.conventions.$inferSelect;
+export type EvalCaseRow = typeof t.evalCases.$inferSelect;
+export type EvalRunRow = typeof t.evalRuns.$inferSelect;
+export type EvalSuiteRunRow = typeof t.evalSuiteRuns.$inferSelect;
