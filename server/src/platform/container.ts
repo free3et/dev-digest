@@ -73,6 +73,8 @@ export class Container {
   private _contextDocs?: ContextDocStore;
   private _embedder?: Embedder;
   private llmCache = new Map<string, LLMProvider>();
+  /** Single-shot (no transport retry) providers; kept apart from `llmCache`. */
+  private singleShotCache = new Map<string, LLMProvider>();
 
   // Shared repositories for cross-cutting entities (agents, reviews/pulls,
   // runs). Constructed here, in the composition root, so consuming modules use
@@ -195,6 +197,38 @@ export class Container {
     return provider;
   }
 
+  /**
+   * A provider for a call that must be made EXACTLY once (eval suites, spec A
+   * AC-10): no transport-level retry and a bounded per-request timeout. Pre-built
+   * overrides win exactly as in `llm()`. Only `openrouter` can honour this
+   * strictly (its constructor takes `maxRetries` / `timeoutMs`).
+   *
+   * KNOWN GAP (plan R1): the `openai` and `anthropic` adapters still retry
+   * transient errors through `withRetry` and their SDK defaults, so for them
+   * this falls back to `llm(id)`; the request-level `maxRetries: 0` set by the
+   * caller is all that applies.
+   */
+  async llmSingleShot(
+    id: 'openai' | 'anthropic' | 'openrouter',
+    opts: { timeoutMs: number },
+  ): Promise<LLMProvider> {
+    const injected = this.overrides.llm?.[id];
+    if (injected) return injected;
+    if (id !== 'openrouter') return this.llm(id);
+    const cacheKey = `${id}:${opts.timeoutMs}`;
+    const cached = this.singleShotCache.get(cacheKey);
+    if (cached) return cached;
+    const key = await this.secrets.get('OPENROUTER_API_KEY');
+    if (!key) throw new ConfigError('OPENROUTER_API_KEY is not configured');
+    const provider = new OpenRouterProvider(key, {
+      maxRetries: 0,
+      timeoutMs: opts.timeoutMs,
+      estimateCost: (model, tokensIn, tokensOut) => this.priceBook.estimate(model, tokensIn, tokensOut),
+    });
+    this.singleShotCache.set(cacheKey, provider);
+    return provider;
+  }
+
   private async buildLlm(id: 'openai' | 'anthropic' | 'openrouter'): Promise<LLMProvider> {
     if (id === 'openai') {
       const key = await this.secrets.get('OPENAI_API_KEY');
@@ -238,6 +272,7 @@ export class Container {
    */
   invalidateSecretCaches(): void {
     this.llmCache.clear();
+    this.singleShotCache.clear();
     this._github = undefined;
     this._embedder = undefined;
   }

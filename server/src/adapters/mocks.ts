@@ -53,16 +53,23 @@ export interface MockLLMOptions {
    * by req.schemaName; falls back to `structured` when no entry matches.
    */
   structuredBySchema?: Record<string, unknown>;
+  /**
+   * Scripted mode: computes the fixture from the request itself (e.g. answer by
+   * system prompt). Takes precedence over `structuredBySchema` / `structured`.
+   * Its return value is still validated by `req.schema`; a throw / rejection
+   * rejects the call; a promise that never settles hangs it (timeout tests).
+   */
+  structuredFn?: (req: StructuredRequest<unknown>) => unknown | Promise<unknown>;
   completionText?: string;
   embedding?: number[];
 }
 
 export class MockLLMProvider implements LLMProvider {
-  readonly id: 'openai' | 'anthropic';
+  readonly id: 'openai' | 'anthropic' | 'openrouter';
   public calls: { method: string; req: unknown }[] = [];
 
   constructor(
-    id: 'openai' | 'anthropic' = 'openai',
+    id: 'openai' | 'anthropic' | 'openrouter' = 'openai',
     private opts: MockLLMOptions = {},
   ) {
     this.id = id;
@@ -72,7 +79,7 @@ export class MockLLMProvider implements LLMProvider {
     this.calls.push({ method: 'listModels', req: null });
     return (
       this.opts.models ?? [
-        { id: 'gpt-4.1', provider: this.id === 'anthropic' ? 'anthropic' : 'openai' },
+        { id: 'gpt-4.1', provider: this.id },
       ]
     );
   }
@@ -90,7 +97,9 @@ export class MockLLMProvider implements LLMProvider {
 
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     this.calls.push({ method: 'completeStructured', req });
-    const fixture = this.opts.structuredBySchema?.[req.schemaName] ?? this.opts.structured ?? {};
+    const fixture = this.opts.structuredFn
+      ? await this.opts.structuredFn(req as StructuredRequest<unknown>)
+      : (this.opts.structuredBySchema?.[req.schemaName] ?? this.opts.structured ?? {});
     const parsed = (req.schema as z.ZodType<T>).safeParse(fixture);
     if (!parsed.success) {
       throw new Error(`MockLLMProvider fixture failed schema: ${parsed.error.message}`);
