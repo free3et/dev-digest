@@ -28,7 +28,58 @@
       "cost": "Cost"
     },
     "pass": "pass",
-    "fail": "fail"
+    "fail": "fail",
+    "emptyAgents": "No agent has eval cases yet. Create one from an accepted or dismissed finding, or from an agent's Evals tab.",
+    "emptyLink": "Go to agents",
+    "deltaNone": "—",
+    "loadErrorTitle": "Couldn’t load the eval dashboard",
+    "loadErrorBody": "The eval dashboard could not be loaded.",
+    "recent": {
+      "title": "Recent eval runs · all agents",
+      "empty": "No finished eval runs yet.",
+      "loading": "Loading recent eval runs…",
+      "loadErrorTitle": "Couldn’t load recent eval runs",
+      "loadErrorBody": "The recent eval runs could not be loaded.",
+      "partial": "partial",
+      "columns": {
+        "agent": "Agent",
+        "ranAt": "Ran at",
+        "version": "Version",
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation",
+        "pass": "Pass"
+      }
+    },
+    "subtitle": "Regression harness across all reviewer agents · pick an agent to see its runs",
+    "agents": {
+      "title": "Agents"
+    },
+    "card": {
+      "lastRun": "Last run v{version} · <time></time> · {passed}/{total} pass",
+      "neverRun": "Never run · {count, plural, one {# case} other {# cases}}",
+      "pill": {
+        "drop": "drop",
+        "running": "running",
+        "partial": "partial"
+      },
+      "pillTitle": {
+        "drop": "Recall or precision fell against the previous finished run",
+        "running": "An eval run was in progress when this page loaded",
+        "partial": "The latest run finished with errored cases"
+      },
+      "metric": {
+        "recall": "Recall",
+        "precision": "Prec",
+        "citation": "Cite"
+      },
+      "metricName": {
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation accuracy"
+      }
+    },
+    "openEvalPageFor": "Open eval page of {name}"
   },
   "caseEditor": {
     "newCase": "New eval case",
@@ -42,7 +93,8 @@
     "inputLabel": "Input",
     "tabs": {
       "diff": "Diff",
-      "prMeta": "PR meta"
+      "prMeta": "PR meta",
+      "files": "Files"
     },
     "diffPlaceholder": "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,6 +10,7 @@\n+  stripeKey: \"sk_live_...\"",
     "titleLabel": "Title",
@@ -55,7 +107,62 @@
     "invalidJson": "invalid JSON",
     "lastRunPassed": "Last run passed",
     "lastRunFailed": "Last run failed",
-    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s"
+    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s",
+    "tabsLabel": "Frozen input",
+    "subtitle": {
+      "mustFind": "Seeded from an accepted finding · assert the expected output",
+      "mustNotFlag": "Seeded from a dismissed finding · assert the expected output"
+    },
+    "banner": {
+      "mustFind": "POSITIVE CASE · MUST find {title} at {file}:{line}",
+      "mustNotFlag": "NEGATIVE CASE · MUST NOT flag {title} at {file}:{line}"
+    },
+    "findingSkeleton": "Finding skeleton",
+    "cancel": "Cancel",
+    "costHint": "Runs the agent once (one paid model call)",
+    "loadingDraft": "Loading the case…",
+    "prMeta": {
+      "number": "PR number",
+      "title": "Title",
+      "repo": "Repository",
+      "body": "Body",
+      "noBody": "no body"
+    },
+    "json": {
+      "parse": "Not valid JSON: the text cannot be parsed.",
+      "shape": "The expectation has the wrong shape: {path}.",
+      "unknownKey": "Unknown key not allowed: {path}.",
+      "range": "end_line must be greater than or equal to start_line.",
+      "fileMismatch": "file must be {file}, the file of the frozen diff.",
+      "kindMismatch": "kind must stay {kind}, the decision of the finding."
+    },
+    "saveBlocked": {
+      "name": "Save is disabled: the name is empty.",
+      "json": "Save is disabled: the expected output is not valid JSON."
+    },
+    "result": {
+      "lastRunErrored": "Last run errored",
+      "expectedMustFind": "expected ≥ 1 matching finding, got {count}",
+      "expectedMustNotFlag": "expected 0 matching findings, got {count}",
+      "kept": "{count} kept",
+      "dropped": "{count} dropped",
+      "duration": "{seconds}s",
+      "cost": "{cost}"
+    },
+    "errors": {
+      "finding_undecided": "Accept or dismiss the finding first (finding_undecided).",
+      "no_agent": "This finding’s agent no longer exists (no_agent).",
+      "duplicate": "This finding already has an eval case (duplicate).",
+      "patch_unavailable": "The diff for this file is no longer stored (patch_unavailable).",
+      "not_found": "Finding not found (not_found).",
+      "validation_error": "The case was refused as invalid (validation_error). Check the name and the expected output.",
+      "file_not_in_diff": "The expected output points at a file that is not in the frozen diff (file_not_in_diff).",
+      "kind_mismatch": "The finding’s decision changed since this modal opened (kind_mismatch). Close and reopen the modal.",
+      "rate_limited": "Too many requests. Try again in a minute (rate_limited).",
+      "payload_too_large": "The request is too large (payload_too_large).",
+      "network_error": "Could not reach the server. Check the connection and retry.",
+      "unknown": "The request failed."
+    }
   },
   "evalsTab": {
     "metricsTitle": "Eval metrics",
@@ -71,7 +178,52 @@
     "run": "Run",
     "running": "Running…",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "deleteCase": "Delete eval case “{name}”",
+    "kind": {
+      "must_find": "Positive",
+      "must_not_flag": "Negative",
+      "must_findName": "Positive case · must find",
+      "must_not_flagName": "Negative case · must not flag"
+    },
+    "runEval": "Run eval ({count})",
+    "confirm": {
+      "title": "Run {count, plural, one {# eval case} other {# eval cases}}?",
+      "body": "This calls the model once per case. Last finished run cost: {cost}.",
+      "confirm": "Run eval",
+      "cancel": "Cancel"
+    },
+    "deleteConfirm": {
+      "title": "Delete eval case “{name}”?",
+      "body": "Finished runs keep their stored metrics.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "progress": "{completed} / {total} cases",
+    "status": {
+      "running": "running",
+      "done": "done",
+      "partial": "partial",
+      "failed": "failed"
+    },
+    "partialNotice": "Run finished partially: {errored, plural, one {# case} other {# cases}} errored.",
+    "finishedNotice": "Run finished: {passed} / {total} cases passed.",
+    "failedNotice": "Run failed: {reason}",
+    "failedNoReason": "Run failed.",
+    "refusals": {
+      "eval_run_in_progress": "A run of this agent is already in progress (eval_run_in_progress).",
+      "no_cases": "This agent has no eval cases (no_cases).",
+      "too_many_cases": "This agent has more than 100 eval cases (too_many_cases).",
+      "not_found": "Agent or case not found (not_found).",
+      "rate_limited": "Too many requests. Try again in a minute (rate_limited).",
+      "network_error": "Could not reach the server. Check the connection and retry.",
+      "unknown": "The request failed."
+    },
+    "fileLine": "{file}:{line}",
+    "lastRun": "Last run",
+    "noCostYet": "—",
+    "casesLoadErrorTitle": "Couldn’t load eval cases",
+    "casesLoadErrorBody": "The eval cases could not be loaded."
   },
   "page": {
     "crumbSkillsLab": "Skills Lab",
@@ -80,5 +232,180 @@
     "crumbEvals": "Evals",
     "crumbNewCase": "New case",
     "crumbEvalCase": "Eval case"
+  },
+  "history": {
+    "title": "Recent runs",
+    "subtitle": "Latest {count, plural, one {# run} other {# runs}}, newest first",
+    "empty": "No runs yet. Run the eval to record the first one.",
+    "loading": "Loading run history…",
+    "loadErrorTitle": "Couldn’t load run history",
+    "loadErrorBody": "The run history could not be loaded.",
+    "none": "—",
+    "version": "v{version}",
+    "passedOfTotal": "{passed}/{total}",
+    "selectRun": "Select run from {ranAt}",
+    "notSelectable": "Only finished runs can be compared",
+    "compare": "Compare",
+    "compareHint": "Select exactly two finished runs to compare.",
+    "columns": {
+      "select": "Select",
+      "ranAt": "Ran at",
+      "version": "Version",
+      "status": "Status",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "cost": "Cost",
+      "pass": "Pass"
+    },
+    "regression": {
+      "label": "Regression",
+      "metric": {
+        "recall": "recall",
+        "precision": "precision",
+        "citation": "citation"
+      },
+      "metricStart": {
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation"
+      },
+      "dipped": "{metric} dipped {points, plural, one {# pt} other {# pts}}",
+      "dippedBelowOne": "{metric} dipped <1 pt",
+      "list2": "{a} and {b}",
+      "list3": "{a}, {b} and {c}",
+      "dipSentence": "{list} on v{version}.",
+      "up1": "{a} up.",
+      "up2": "{a} and {b} both up.",
+      "caseSets": "Metrics are over different case sets."
+    },
+    "selected": "Recent runs · {count} selected"
+  },
+  "compare": {
+    "title": "Compare runs",
+    "loading": "Loading runs…",
+    "runA": "Run A (older)",
+    "runB": "Run B (newer)",
+    "ranAt": "Ran at",
+    "version": "Agent version",
+    "skills": "Skills",
+    "noSkills": "none",
+    "none": "—",
+    "differentCaseSets": "Metrics are over different case sets",
+    "casesHeading": "Cases",
+    "columns": {
+      "case": "Case",
+      "outcomeA": "Run A outcome",
+      "outcomeB": "Run B outcome",
+      "durationA": "Run A duration",
+      "costA": "Run A cost",
+      "durationB": "Run B duration",
+      "costB": "Run B cost"
+    },
+    "outcome": {
+      "passed": "passed",
+      "failed": "failed",
+      "error": "error",
+      "notInRun": "not in run",
+      "caseDeleted": "case deleted"
+    },
+    "changed": "changed",
+    "seconds": "{value}s",
+    "promptDiff": {
+      "title": "System prompt diff",
+      "show": "Show diff",
+      "hide": "Hide diff",
+      "same": "Same system prompt",
+      "added": "added line",
+      "removed": "removed line",
+      "loading": "Loading prompt versions…",
+      "loadError": "Couldn’t load the prompt versions."
+    },
+    "loadErrorTitle": "Couldn’t load the runs",
+    "loadErrorBody": "The runs could not be compared.",
+    "titleWithVersions": "Compare runs · v{a} → v{b}",
+    "close": "Close",
+    "tiles": {
+      "label": "Metric comparison",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "cost": "Cost",
+      "values": "<a></a> → <b></b>"
+    },
+    "legend": {
+      "old": "v{version} (old)",
+      "new": "v{version} (new)"
+    },
+    "runInfoHeading": "Run details",
+    "subtitleCaseSet": "Old prompt vs new — metric deltas and prompt diff on the {count}-case set",
+    "subtitleDifferentSets": "Old prompt vs new — metric deltas and prompt diff on different case sets"
+  },
+  "metricFormat": {
+    "percent": "{value}%",
+    "pointUp": "▲ {points} pt",
+    "pointDown": "▼ {points} pt",
+    "pointFlat": "0 pt",
+    "lessThanOne": "<1",
+    "upName": "up {points} pt",
+    "downName": "down {points} pt",
+    "flatName": "unchanged",
+    "costUp": "▲ +{cost}",
+    "costDown": "▼ −{cost}",
+    "sparklineName": "{metric} trend over {count, plural, one {# run} other {# runs}}: from {from}% to {to}%"
+  },
+  "agentPage": {
+    "crumbAgent": "Agent",
+    "backLink": "All agents",
+    "openEvalsTab": "Open Evals tab",
+    "openEvalsTabFor": "Open Evals tab of {name}",
+    "loading": "Loading agent…",
+    "loadingRuns": "Loading runs…",
+    "loadErrorTitle": "Couldn't load this agent",
+    "loadErrorBody": "The agent could not be loaded.",
+    "subtitle": {
+      "sameSet": "Regression harness · {count, plural, one {# run} other {# runs}} on the {cases}-case set",
+      "differentSets": "Regression harness · {count, plural, one {# run} other {# runs}} on different case sets",
+      "none": "Regression harness · no finished runs yet"
+    },
+    "switcher": {
+      "label": "Switch agent",
+      "description": "Opens the selected agent's eval page"
+    },
+    "notFound": {
+      "title": "Agent not found",
+      "body": "This agent does not exist or was deleted."
+    },
+    "noCases": {
+      "text": "This agent has no eval cases yet.",
+      "link": "Add cases in the Evals tab"
+    },
+    "cards": {
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation accuracy"
+    },
+    "trend": {
+      "title": "Metric trend",
+      "legend": {
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation"
+      },
+      "noData": "{metric} (no data)",
+      "empty": "No finished runs yet.",
+      "oneRun": "The trend needs at least two finished runs.",
+      "summary": "Metric trend over {count} finished runs, oldest to newest",
+      "tableCaption": "Metric trend data",
+      "columns": {
+        "version": "Version",
+        "ranAt": "Ran at",
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation"
+      },
+      "tooltipHeader": "v{version} · <time></time>",
+      "tooltipMetric": "{metric} {value}"
+    }
   }
 }

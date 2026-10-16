@@ -8,7 +8,7 @@ import { usePrComments, useCreatePrComment, useFindingAction } from "@/lib/hooks
 import { useSmartDiff } from "@/lib/hooks/smart-diff";
 import { notify } from "@/lib/toast";
 import type { PrFile, ReviewRecord } from "@devdigest/shared";
-import { latestFindingsPerAgent } from "../../../helpers";
+import { findingAgentIds, latestFindingsPerAgent } from "../../../helpers";
 import { DEFAULT_ORDER, type DiffOrder } from "./constants";
 import { diffTotals, flaggedPathsOf, orderFilesByGroups, uniqueByPath } from "./helpers";
 import { OrderToggle } from "./OrderToggle";
@@ -69,6 +69,7 @@ export function DiffTab({
     },
   };
 
+  const agentIds = React.useMemo(() => findingAgentIds(reviews), [reviews]);
   const groups = smartDiff?.groups;
   const findingApi: DiffFindingApi = {
     findings: latestFindingsPerAgent(reviews),
@@ -77,6 +78,7 @@ export function DiffTab({
     pendingFindingId: findingAction.isPending ? (findingAction.variables?.findingId ?? null) : null,
     repoFullName,
     headSha,
+    agentIdFor: (findingId) => agentIds.get(findingId),
   };
 
   const showSmart = order === "smart" && !!groups;

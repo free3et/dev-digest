@@ -3,7 +3,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { Agent, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
+import type { Agent, AgentVersion, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
 
 export function useAgents() {
   return useQuery({
@@ -87,5 +87,15 @@ export function useProviderModels(provider: Provider | null | undefined) {
     queryFn: () => api.get<ModelInfo[]>(`/providers/${provider}/models`),
     enabled: !!provider,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** One stored agent version (compare view prompt diff). Idle without both args. */
+export function useAgentVersion(agentId: string | null | undefined, version: number | null | undefined) {
+  return useQuery({
+    queryKey: ["agent-version", agentId, version],
+    queryFn: () => api.get<AgentVersion>(`/agents/${agentId}/versions/${version}`),
+    enabled: !!agentId && version != null,
+    staleTime: Infinity,
   });
 }

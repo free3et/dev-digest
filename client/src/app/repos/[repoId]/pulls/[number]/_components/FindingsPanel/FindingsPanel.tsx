@@ -18,6 +18,7 @@ export function FindingsPanel({
   prId,
   repoFullName,
   headSha,
+  agentId,
   severityFilter: controlledFilter,
   onSeverityFilterChange,
   hideSeverityCounters = false,
@@ -26,6 +27,8 @@ export function FindingsPanel({
   prId: string;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Agent of the review these findings belong to — enables the eval-case control. */
+  agentId?: string | null;
   /** Controlled severity filter — when provided (including `null`), the
    *  panel's own toolbar counters stop managing filter state themselves and
    *  defer to this value + `onSeverityFilterChange` instead. Used when a
@@ -125,6 +128,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              agentId={agentId}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

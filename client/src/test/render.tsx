@@ -10,14 +10,16 @@ import conventions from "../../messages/en/conventions.json";
 import blast from "../../messages/en/blast.json";
 import brief from "../../messages/en/brief.json";
 import context from "../../messages/en/context.json";
+import evalMessages from "../../messages/en/eval.json";
+import prReview from "../../messages/en/prReview.json";
 import { ToastProvider } from "../lib/toast";
 
-/** Render with React Query + next-intl (skills, agents) + toasts. */
+/** Render with React Query + next-intl (skills, agents, eval, prReview, …) + toasts. */
 export function renderWithProviders(ui: React.ReactElement): ReturnType<typeof render> {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <NextIntlClientProvider locale="en" messages={{ skills, agents, skillStats, conventions, blast, brief, context }}>
+      <NextIntlClientProvider locale="en" messages={{ skills, agents, skillStats, conventions, blast, brief, context, eval: evalMessages, prReview }}>
         <ToastProvider>{ui}</ToastProvider>
       </NextIntlClientProvider>
     </QueryClientProvider>,

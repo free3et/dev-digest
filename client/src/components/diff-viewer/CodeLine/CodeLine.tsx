@@ -87,6 +87,7 @@ export function CodeLine({
               pending={findingApi.pendingFindingId === f.id}
               repoFullName={findingApi.repoFullName}
               headSha={findingApi.headSha}
+              agentId={findingApi.agentIdFor?.(f.id)}
             />
           </div>
         ))}

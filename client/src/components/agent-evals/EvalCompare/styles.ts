@@ -1,0 +1,52 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 14 } satisfies CSSProperties,
+  body: { display: "flex", flexDirection: "column", gap: 14, padding: "18px 24px" } satisfies CSSProperties,
+  footer: { display: "flex", justifyContent: "flex-end", gap: 12 } satisfies CSSProperties,
+  subtitle: { fontSize: 12.5, color: "var(--text-muted)" } satisfies CSSProperties,
+  subheading: { fontSize: 13, fontWeight: 600, margin: 0 } satisfies CSSProperties,
+  muted: { fontSize: 13, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
+  notice: {
+    fontSize: 12.5,
+    margin: 0,
+    padding: "6px 10px",
+    borderRadius: 6,
+    background: "var(--bg-hover)",
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 12.5, tableLayout: "fixed" } satisfies CSSProperties,
+  th: {
+    textAlign: "left",
+    padding: "6px 8px",
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    borderBottom: "1px solid var(--border)",
+  } satisfies CSSProperties,
+  td: { padding: "6px 8px", borderBottom: "1px solid var(--border)", verticalAlign: "top" } satisfies CSSProperties,
+  // Long names and paths must not wrap (client INSIGHTS 2026-09-26).
+  ellipsis: {
+    display: "block",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies CSSProperties,
+  changed: { fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  diffBox: {
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+    maxHeight: 360,
+    overflow: "auto",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    background: "var(--bg-elevated)",
+    fontSize: 12,
+  } satisfies CSSProperties,
+  diffLine: { display: "flex", gap: 8, padding: "0 8px", whiteSpace: "pre-wrap", wordBreak: "break-word" } satisfies CSSProperties,
+  diffMarker: { width: 12, flexShrink: 0, fontWeight: 700 } satisfies CSSProperties,
+  legend: { display: "flex", gap: 16, fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
+  legendItem: { display: "inline-flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
+  diffAdded: { background: "var(--ok-bg, rgba(46,160,67,0.12))" } satisfies CSSProperties,
+  diffRemoved: { background: "var(--crit-bg)" } satisfies CSSProperties,
+} as const;

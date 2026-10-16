@@ -42,3 +42,66 @@ export function formatTokenCount(n: number): string {
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
+
+/** MINUS SIGN (U+2212), the typographic minus used in signed deltas. Asserted by code point in tests. */
+export const MINUS = "−";
+
+/** An eval metric in 0..1 as whole percent points, e.g. 0.784 → 78; null/NaN → null. */
+export function toPercent(v: number | null | undefined): number | null {
+  if (v == null || Number.isNaN(v)) return null;
+  return Math.round(v * 100);
+}
+
+/**
+ * Delta B − A of two stored metrics, rounded to 6 decimals so float noise
+ * (0.8 − 0.6) never decides a direction. Null when either side is null.
+ * Always computed from stored values, never from rounded percents (EC-19).
+ */
+export function metricDelta(a: number | null | undefined, b: number | null | undefined): number | null {
+  if (a == null || b == null || Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) * 1e6) / 1e6 + 0; // "+ 0" turns -0 into 0
+}
+
+export interface PointDelta {
+  direction: "up" | "down" | "flat";
+  /** |delta| × 100, rounded to a whole number. */
+  points: number;
+  /** A non-zero delta whose points round to 0 (shown as "<1"). */
+  belowOne: boolean;
+}
+
+/** The one delta rule for every eval screen (banner, tiles, dashboard). Null in, null out. */
+export function pointDelta(d: number | null | undefined): PointDelta | null {
+  if (d == null || Number.isNaN(d)) return null;
+  if (d === 0) return { direction: "flat", points: 0, belowOne: false };
+  const points = Math.round(Math.abs(d) * 100);
+  return { direction: d > 0 ? "up" : "down", points, belowOne: points === 0 };
+}
+
+/** Exact-instant timestamp, "2026-10-12 09:30 UTC": the tooltip of `RanAt`. Unparsable input is returned as is. */
+export function formatRanAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/**
+ * Timestamp in the browser's zone (or `timeZone`), "2026-10-12 09:30". 24-hour,
+ * zero-padded, no zone suffix. Unparsable input is returned as is.
+ * `hourCycle: "h23"` because `hour12: false` can print "24:05".
+ */
+export function formatRanAtLocal(iso: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
