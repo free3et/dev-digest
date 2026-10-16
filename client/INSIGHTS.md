@@ -159,6 +159,11 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-10-16** — Recharts `ResponsiveContainer` renders nothing in jsdom
+  (zero size), so a trend chart test finds no SVG. Mock it to a fixed size in
+  the test (see `TESTING.md`); the vendored `LineChart` also draws `null` as 0,
+  so use Recharts directly for gaps. Pin `TZ=UTC` in `client/vitest.config.ts`
+  (`process.env.TZ`) or local-timestamp assertions differ per machine.
 - **2026-10-06** — `mockFetch` in `src/test/render.tsx` only answers 200, or 404
   for an unmatched route, so an error or `409` path cannot be driven through
   it: stub fetch by hand with `vi.stubGlobal("fetch", …)` returning a

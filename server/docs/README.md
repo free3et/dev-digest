@@ -10,5 +10,9 @@ traces, rate-limit tiers.
 Not here: the API route map (that is `../README.md`), intent for unbuilt work
 (`../specs/`), rejected approaches (`../INSIGHTS.md`).
 
+| File | What |
+|------|------|
+| [`eval.md`](eval.md) | eval module: frozen case input, draft and dry-run (Spec C), code-only scoring, one call per case, suite statuses, boot reaper, dashboard, recent runs across agents (Spec D) |
+
 `src/modules/repo-intel/` keeps its own README next to the code — link to it
 rather than copying it.
