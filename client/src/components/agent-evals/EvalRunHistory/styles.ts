@@ -5,6 +5,7 @@ export const s = {
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 } satisfies CSSProperties,
   headerText: { display: "flex", flexDirection: "column", gap: 2, minWidth: 0 } satisfies CSSProperties,
   version: { color: "var(--accent-text)", fontWeight: 600 } satisfies CSSProperties,
+  host: { maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
   heading: { fontSize: 14, fontWeight: 600, margin: 0 } satisfies CSSProperties,
   subtitle: { fontSize: 12, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,

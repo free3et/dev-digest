@@ -13,7 +13,9 @@ local timestamps, uppercase captions; plan
 `../../specs/2026-10-15-eval-ui-design-alignment.plan.md`) and
 `../../specs/2026-10-16-eval-agent-page-trends.md` (Spec F: per-agent page,
 metric trend, sparklines; plan
-`../../specs/2026-10-16-eval-agent-page-trends.plan.md`).
+`../../specs/2026-10-16-eval-agent-page-trends.plan.md`) and
+`../../specs/2026-10-17-skill-evals-client.md` (Spec G2: the skill Evals tab and
+"Run on evals"; plan `../../specs/2026-10-17-skill-evals-client.plan.md`).
 
 Path shorthand below: `AE/` is `src/components/agent-evals/` (the parts the
 Evals tab and the per-agent page share) and `EM/` is
@@ -51,8 +53,9 @@ dashboard card chevron and the recent-run agent link go to `/eval/:agentId`.
 | State pill | `drop`, `running`, `partial` text pills (card and recent runs) | `src/app/eval/_components/EvalDashboard/StatePill/` |
 | Recent runs section | below the Agents section of the dashboard | `src/app/eval/_components/EvalDashboard/RecentRuns/RecentRuns.tsx` |
 | Per-agent eval page | route `/eval/:agentId` | `src/app/eval/[agentId]/page.tsx`, `src/app/eval/[agentId]/_components/AgentEvalPage/` (`AgentEvalPage.tsx`, `helpers.ts`, `hooks/useAgentEvalPage.ts`, `AgentHeader/`, `AgentHeader/AgentSwitcher/`, `AgentNotFound/`, `MetricCards/`, `MetricTrend/`, `MetricTrend/TrendTooltip/`) |
-| Evals tab | agent editor tab `evals` (`?tab=evals`) | `src/app/agents/[id]/_components/AgentEditor/AgentEditor.tsx:30`, `constants.ts:15`, `_components/EvalsTab/` (`EvalsTab.tsx`, `EvalCasesList/`) |
-| Run control, run history, regression banner, compare dialog | shared by the Evals tab and the per-agent page | `AE/EvalRunControl/`, `AE/EvalRunHistory/`, `AE/RegressionBanner/`, `AE/EvalCompare/`, `AE/helpers.ts` |
+| Evals tab | agent editor tab `evals` (`?tab=evals`) | `src/app/agents/[id]/_components/AgentEditor/AgentEditor.tsx:30`, `constants.ts:15`, `_components/EvalsTab/` (`EvalsTab.tsx`) |
+| Skill Evals tab and "Run on evals" | skill detail tab `evals` (`/skills?id=…&tab=evals`) and the header button on every tab | `src/app/skills/_components/SkillDetail/` (`_components/SkillEvalsTab/` with `HostPicker/`, `CopyCaseDialog/`; `_components/RunOnEvalsButton/`; `hooks/useSkillEvalHost.ts`) |
+| Case list, run control, run history, regression banner, compare dialog | shared by the agent Evals tab, the skill Evals tab and (not the list) the per-agent page | `AE/EvalCasesList/` (with `CaseEditorDialog/`), `AE/EvalRunControl/`, `AE/EvalRunConfirm/`, `AE/EvalRunHistory/`, `AE/RegressionBanner/`, `AE/EvalCompare/` (`PromptDiff/`, `SkillBodyDiff/`, `LineDiff/`), `AE/helpers.ts` |
 | "Turn into eval case" and its modal | inside an expanded `FindingCard` | `src/components/finding-card/EvalCaseControl/`, `EvalCaseControl/EvalCaseModal/` |
 | Metric rendering shared by all of the above | `MetricPercent`, `PointDelta`, `RanAt`, `EVAL_CAPTION_STYLE`, `METRIC_COLOR` | `EM/EvalMetric.tsx`, `EM/constants.ts` |
 | Sparkline | recall on the dashboard card, one per metric card on the page | `EM/MetricSparkline/MetricSparkline.tsx` |
@@ -79,6 +82,49 @@ The per-agent page adds no hook: it reuses `useAgent`
 
 `PromptDiff`, inside the compare dialog, additionally uses `useAgentVersion`
 (`src/lib/hooks/agents.ts:94`, `GET /agents/:id/versions/:version`).
+
+## Skill Evals (Spec G2)
+
+The shared parts take an **owner**: `{ agentId }` (every agent call site, unchanged)
+or `{ owner: { kind: "agent" | "skill", id } }`, resolved by `resolveOwner`
+(`AE/helpers.ts`). A skill's cases run through a **host agent** (`EvalHost`
+`{ id, name, model }`): run-capable parts (`EvalRunControl`, `EvalCasesList`,
+`CaseEditorDialog`) take `host?: EvalHost | null` (`null` disables running) and
+`runHintId`; history and compare take `hosts?: ReadonlyMap<string, EvalHost>`
+built by the skill tab from `useAgents`, so the shared parts never request
+`/agents` themselves.
+
+- **Tab**: `SKILL_TABS` ends with `evals` (icon `FlaskConical`); the vendored
+  `Tabs` has no `role="tab"`, tests query a `button` named "Evals".
+- **Host state** (`useSkillEvalHost`, one instance in `SkillDetail`, shared by the
+  header button and the tab): preset by `presetHostId` — newest skill suite's
+  `agent_id` if that agent exists, else the first `SkillStats.agents` entry that
+  exists, else none. The explicit choice is stored with its skill id because
+  `SkillDetail` is not keyed by skill. `HostPicker` is a native `<select>`.
+  With no host the hint "Pick an agent…" is the `aria-describedby` of the run
+  control and every per-row Run.
+- **Run on evals** (header, every tab): disabled with a text reason (running, no
+  cases, no host), opens `EvalRunConfirm` (case count, host name and model, last
+  skill suite cost), starts `POST /skills/:id/eval-runs` `{ agent_id }` and then
+  switches to the Evals tab, which adopts the running suite.
+- **Hooks** (`src/lib/hooks/eval.ts`): `useSkillEvalCases` (`["skill-eval-cases", id]`),
+  `useSkillEvalRuns` (`["skill-eval-runs", id]`), `useStartSkillEvalRun`
+  (prepends the created suite into the history cache), `useCreateSkillManualEvalCase`,
+  `useCopyEvalCaseToSkill`, `useAgentCasesForCopy`, and the dispatchers
+  `useOwnerEvalCases` / `useOwnerEvalRuns`. `useRunEvalCase` sends `agent_id` only
+  when given. `useEvalRun` is owner-aware: a skill suite leaving `running`
+  invalidates `["skill-eval-runs", skill_id]` only (never the dashboard).
+  A `host_not_found` refusal invalidates `["agents"]`.
+- **Refusals**: skill requests map `ApiError.code` through `skillRefusalKey` to
+  `skillEvals.refusals.*`; the agent paths keep `evalsTab.refusals.*`.
+- **History / banner / compare**: the version cell is `skill_version`, a "Host"
+  column reads "<name> v<agent_version>" or "Deleted agent"; the banner names the
+  skill version; compare titles with skill versions, shows `SkillBodyDiff` (the
+  skill body from `GET /skills/:id/versions`, "Same skill body" for the same
+  version) and a `role="note"` "Host changed: …" when the host or its version
+  differs. `LineDiff` is the presentational part shared with `PromptDiff`.
+- **Copy from agent case** (`CopyCaseDialog`): mounted only while open; one
+  section per agent with cases; a click sends `POST /skills/:id/eval-cases/copy`.
 
 ## Eval Dashboard (`/eval`)
 
@@ -295,7 +341,7 @@ newest (`trendRows`, `MetricTrend/helpers.ts:23-34`).
 is set. The history is **always** rendered: opening a comparison does not swap
 it out. `EvalRunControl`, `RegressionBanner`, `EvalRunHistory` and `EvalCompare`
 live in `AE/` (imports at `EvalsTab.tsx:9-12`) and are the same components the
-per-agent page uses; only `EvalCasesList` is Evals-tab only. Paths such as
+per-agent page uses; `EvalCasesList` (now also in `AE/`) is shared by the agent and skill Evals tabs only. Paths such as
 `EvalCompare/helpers.ts` and `RegressionBanner/helpers.ts` below are relative to
 `AE/`.
 
@@ -684,3 +730,23 @@ browser; the behaviour above is read from the hook and its jsdom tests.
 `../../specs/2026-10-13-eval-case-modal.plan.md`,
 `../../specs/2026-10-13-eval-dashboard-compare-polish.md` (Spec D) and its plan
 `../../specs/2026-10-13-eval-dashboard-compare-polish.plan.md`.
+
+## Case-list rows and heading (Spec G3)
+
+`AE/EvalCasesList/` now owns the heading row: `EvalRunControl` in heading mode
+(`label="runAll"`, `heading`, `actions`) renders `[Eval cases · P/T passing][Run all
+evals][New eval case][Copy from agent case]`; the tabs no longer render a standalone
+run control (the per-agent page keeps "Run eval (n)").
+
+- **Reference suite**: `referenceSuite(runs)` in `AE/helpers.ts` (newest `done`/`partial`).
+  `useCaseResults(owner)` (`EvalCasesList/hooks/`) reads the owner's history plus one
+  `GET /eval-runs/:refId`; `records: null` while loading or failed (AC-9: no icons, second
+  line is `file:line`, heading "Eval cases"); an empty map when no suite finished (rows read
+  "never run"). A per-case Run never touches these keys.
+- **Row**: status icon (`role="img"`, distinct shapes: check, cross, warning, dot), kind
+  badge, name, `SEVERITY · category` or `assert empty` (`assertParts`), icon-only
+  Run/Edit/Delete (names unchanged). Second line: `expected N finding(s), got M · file:line`,
+  `never run · …`, or `errored · …` (tooltip = record error). `got M` is `matchCount`: same
+  file string and intersecting closed ranges, tolerance 0. The icon uses the stored
+  `outcome`, so after editing an expectation icon and `got` may disagree until the next suite.
+- Pure rules: `EvalCasesList/helpers.ts` (`matchCount`, `rowView`, `passingCount`, `assertParts`).

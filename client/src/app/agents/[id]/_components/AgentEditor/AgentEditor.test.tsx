@@ -20,6 +20,13 @@ vi.mock("../../../../../lib/hooks/eval", () => ({
   useStartEvalRun: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
   useDeleteEvalCase: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
   useRunEvalCase: () => ({ mutate: vi.fn(), isPending: false, isError: false, data: undefined, variables: undefined }),
+  // Owner-aware shared parts (Spec G2): the agent owner reads through these dispatchers.
+  useOwnerEvalCases: () => ({ data: [], isLoading: false, isError: false }),
+  useOwnerEvalRuns: () => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() }),
+  useStartSkillEvalRun: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
+  useCreateSkillManualEvalCase: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
+  useCreateManualEvalCase: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
+  useUpdateEvalCase: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
 }));
 
 import { AgentEditor } from "./AgentEditor";

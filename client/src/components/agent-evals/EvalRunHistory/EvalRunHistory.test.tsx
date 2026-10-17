@@ -166,3 +166,30 @@ describe("helpers", () => {
     expect(effectiveSelection(["a", "gone", "c"], RUNS)).toEqual(["a"]);
   });
 });
+
+describe("EvalRunHistory, skill owner (Spec G2 AC-12)", () => {
+  const hosts = new Map([["h1", { id: "h1", name: "Reviewer A", model: "gpt-x" }]]);
+  const skillRun = (id: string, over: Partial<EvalSuiteRun> = {}) =>
+    run(id, { owner_kind: "skill", skill_id: "s1", skill_version: 3, agent_id: "h1", agent_version: 7, ...over });
+
+  it("reads the skill route, shows the skill version, a Host column and Deleted agent", async () => {
+    const calls = mockFetch({
+      "GET /skills/s1/eval-runs": [skillRun("a"), skillRun("b", { agent_id: "gone", agent_version: 2 })],
+    });
+    renderWithProviders(<EvalRunHistory owner={{ kind: "skill", id: "s1" }} hosts={hosts} onCompare={() => {}} />);
+    expect(await screen.findByRole("columnheader", { name: "Host" })).toBeInTheDocument();
+    const rows = screen.getAllByRole("row");
+    expect(within(rows[1]!).getByText("v3")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("Reviewer A v7")).toHaveAttribute("title", "Reviewer A v7");
+    expect(within(rows[2]!).getByText("Deleted agent")).toBeInTheDocument();
+    expect(calls.some((c) => c.path.startsWith("/agents/") || c.path === "/agents")).toBe(false);
+  });
+
+  it("shows — in the host cell while hosts are still loading", async () => {
+    mockFetch({ "GET /skills/s1/eval-runs": [skillRun("a")] });
+    renderWithProviders(<EvalRunHistory owner={{ kind: "skill", id: "s1" }} onCompare={() => {}} />);
+    const rows = await screen.findAllByRole("row");
+    expect(within(rows[1]!).queryByText("Deleted agent")).toBeNull();
+    expect(rows[1]!.querySelectorAll("td")[3]).toHaveTextContent("—");
+  });
+});

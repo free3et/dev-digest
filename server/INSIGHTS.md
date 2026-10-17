@@ -61,6 +61,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Codebase Patterns
 
+- **2026-10-17** — A partial unique index used as an `ON CONFLICT` arbiter
+  needs its FULL predicate repeated in the conflict `where`: after adding
+  `owner_kind` to the running-suite indexes, `insertSuiteRun` must pass
+  `status = 'running' AND owner_kind = …` or a lost race is a 500 ("no unique
+  or exclusion constraint matching the ON CONFLICT specification"), not a 409.
+  Also: `PATCH`/`DELETE`/`POST /eval-cases/:id/run` once read `owner_id` as an
+  agent id without `owner_kind`; they now go through `ownerOf(row)` and
+  `lockOwner`. `server/src/modules/eval/repository.ts`, `service.ts`
 - **2026-10-05** — The clone's working tree is always the default branch:
   `sync` runs `reset --hard origin/<default>`, and a PR head exists only as
   the ref `pr-<n>`. Anything that reads repo files from the tree (e.g. project

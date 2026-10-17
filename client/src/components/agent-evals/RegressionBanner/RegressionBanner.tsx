@@ -10,15 +10,21 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
-import { useAgentEvalRuns } from "@/lib/hooks/eval";
+import { useOwnerEvalRuns } from "@/lib/hooks/eval";
+import { resolveOwner, type OwnerProps } from "../helpers";
 import { regressionBanner, type BannerMetric } from "./helpers";
 import { s } from "./styles";
 
-export function RegressionBanner({ agentId }: { agentId: string }) {
+export function RegressionBanner(props: OwnerProps) {
+  const owner = resolveOwner(props);
   const t = useTranslations("eval");
-  const runs = useAgentEvalRuns(agentId);
+  const runs = useOwnerEvalRuns(owner);
   if (runs.isLoading || runs.isError || !runs.data) return null;
-  const banner = regressionBanner(runs.data);
+  // A skill's suites are versioned by the skill; fall back to the host's version if absent.
+  const banner = regressionBanner(
+    runs.data,
+    owner.kind === "skill" ? (r) => r.skill_version ?? r.agent_version : undefined,
+  );
   if (!banner) return null;
 
   // The first named metric opens the sentence, so it takes the capitalised form.

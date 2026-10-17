@@ -11,17 +11,20 @@ import { s } from "./styles";
 export function RunResult({
   result,
   errorKey,
+  errorText,
 }: {
   result: EvalDryRunResult | null;
   /** The dry-run request itself failed (429, network, a refusal). */
   errorKey: ModalErrorKey | null;
+  /** Ready-made text that replaces the `errors.*` one (the skill owner's refusal wording). */
+  errorText?: string | null;
 }) {
   const t = useTranslations("eval.caseEditor");
 
   if (errorKey) {
     return (
       <div role="alert" style={s.box}>
-        <span style={s.error}>{t(`errors.${errorKey}`)}</span>
+        <span style={s.error}>{errorText ?? t(`errors.${errorKey}`)}</span>
       </div>
     );
   }

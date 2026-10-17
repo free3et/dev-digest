@@ -19,7 +19,7 @@ export interface BannerDip {
 }
 
 export interface RegressionBannerData {
-  /** `agent_version` of the newest finished run. */
+  /** Version of the newest finished run (`agent_version` unless `versionOf` says otherwise). */
   version: number;
   dips: BannerDip[];
   ups: BannerMetric[];
@@ -29,7 +29,8 @@ export interface RegressionBannerData {
 type RunLike = Pick<
   EvalSuiteRun,
   "status" | "agent_version" | "case_ids" | "recall" | "precision" | "citation_accuracy"
->;
+> &
+  Partial<Pick<EvalSuiteRun, "skill_version">>;
 
 /**
  * Spec D AC-13..16 over the history list (newest first). Compares the two
@@ -38,7 +39,10 @@ type RunLike = Pick<
  * triggers the banner. Deltas use the same 6 dp rounding and null rule as the
  * dashboard's `drop` (`metricDelta` + `pointDelta`).
  */
-export function regressionBanner(runs: readonly RunLike[]): RegressionBannerData | null {
+export function regressionBanner(
+  runs: readonly RunLike[],
+  versionOf: (run: RunLike) => number = (r) => r.agent_version,
+): RegressionBannerData | null {
   const finished = runs.filter(isFinished);
   const newest = finished[0];
   const prev = finished[1];
@@ -55,7 +59,7 @@ export function regressionBanner(runs: readonly RunLike[]): RegressionBannerData
   if (!dips.some((d) => d.metric === "recall" || d.metric === "precision")) return null;
 
   return {
-    version: newest.agent_version,
+    version: versionOf(newest),
     dips,
     ups,
     differentCaseSets: !sameCaseSet(newest.case_ids, prev.case_ids),

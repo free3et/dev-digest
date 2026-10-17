@@ -12,26 +12,42 @@ import { useTranslations } from "next-intl";
 import { Button, Modal } from "@devdigest/ui";
 import type { EvalCase, EvalDryRunResult, EvalExpectationInput } from "@devdigest/shared";
 import { useDialogA11y } from "@/lib/hooks/dialog-a11y";
-import { useCreateManualEvalCase, useRunEvalCase, useUpdateEvalCase } from "@/lib/hooks/eval";
+import {
+  useCreateManualEvalCase,
+  useCreateSkillManualEvalCase,
+  useRunEvalCase,
+  useUpdateEvalCase,
+  type EvalHost,
+} from "@/lib/hooks/eval";
 import { InputTabs } from "@/components/finding-card/EvalCaseControl/EvalCaseModal/InputTabs";
 import { RunResult } from "@/components/finding-card/EvalCaseControl/EvalCaseModal/RunResult";
 import { modalErrorKey, saveBlockReason } from "@/components/finding-card/EvalCaseControl/EvalCaseModal/helpers";
 import { s } from "@/components/finding-card/EvalCaseControl/EvalCaseModal/styles";
-import { NEW_CASE_SKELETON, storedJsonText, validateCaseJson } from "./helpers";
+import { resolveOwner, type OwnerProps } from "../../helpers";
+import { NEW_CASE_SKELETON, editorErrorKey, storedJsonText, validateCaseJson } from "./helpers";
 
-export interface CaseEditorDialogProps {
-  agentId: string;
+export type CaseEditorDialogProps = OwnerProps & {
   /** The case to edit; omit to write a new one. */
   evalCase?: EvalCase;
+  /** Host agent that runs a skill-owned case; `null`/absent disables running there. */
+  host?: EvalHost | null;
   onClose: () => void;
-}
+};
 
-export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialogProps) {
+export function CaseEditorDialog(props: CaseEditorDialogProps) {
+  const { evalCase, host, onClose } = props;
+  const owner = resolveOwner(props);
+  const isSkill = owner.kind === "skill";
   const t = useTranslations("eval.caseEditor");
+  const tEval = useTranslations("eval");
   const editing = !!evalCase;
-  const update = useUpdateEvalCase(agentId);
-  const create = useCreateManualEvalCase(agentId);
+  const update = useUpdateEvalCase(owner);
+  const createAgent = useCreateManualEvalCase(isSkill ? null : owner.id);
+  const createSkill = useCreateSkillManualEvalCase(isSkill ? owner.id : null);
+  const create = isSkill ? createSkill : createAgent;
   const run = useRunEvalCase();
+  const canHost = !isSkill || !!host;
+  const hostId = isSkill ? host?.id : undefined;
 
   const skeletonText = useMemo(
     () => (evalCase ? storedJsonText(evalCase) : JSON.stringify(NEW_CASE_SKELETON, null, 2)),
@@ -40,7 +56,8 @@ export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialo
   const [name, setName] = useState(evalCase?.name ?? "");
   const [jsonText, setJsonText] = useState(skeletonText);
   const [patch, setPatch] = useState("");
-  const [runOnSave, setRunOnSave] = useState(true);
+  const [runOnSaveEdit, setRunOnSaveEdit] = useState<boolean | null>(null);
+  const runOnSave = (runOnSaveEdit ?? true) && canHost;
   const [savedCase, setSavedCase] = useState<EvalCase | null>(null);
   const [saveResult, setSaveResult] = useState<EvalDryRunResult | null>(null);
   const runningRef = useRef(false);
@@ -66,11 +83,11 @@ export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialo
   const busy = update.isPending || create.isPending || run.isPending;
   const saved = savedCase !== null;
   const canSave = blocked === null && !patchMissing && !busy && !saved;
-  const canRun = editing && validity.ok && !busy;
+  const canRun = editing && validity.ok && !busy && canHost;
 
   const execRun = (caseId: string, expected?: EvalExpectationInput) =>
     run.mutate(
-      { caseId, expectedOutput: expected },
+      { caseId, expectedOutput: expected, agentId: hostId },
       { onSuccess: (r) => setSaveResult(r), onSettled: () => (runningRef.current = false) },
     );
 
@@ -105,6 +122,10 @@ export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialo
   const title = editing ? t("caseTitle", { name: evalCase.name }) : t("newTitle");
   const result = saveResult ?? run.data ?? null;
   const requestError = update.error ?? create.error ?? run.error;
+  const errorText = (err: unknown) => {
+    const k = editorErrorKey(owner, err);
+    return k.scope === "skill" ? tEval(`skillEvals.refusals.${k.key}`) : t(`errors.${k.key}`);
+  };
   const showError = update.isError || create.isError || run.isError;
 
   return createPortal(
@@ -125,14 +146,14 @@ export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialo
                 type="checkbox"
                 role="switch"
                 checked={runOnSave}
-                disabled={saved}
-                onChange={(e) => setRunOnSave(e.target.checked)}
+                disabled={saved || !canHost}
+                onChange={(e) => setRunOnSaveEdit(e.target.checked)}
               />
               {t("runOnSave")}
             </label>
             <span style={s.spacer} />
             <span id={hintId} style={s.hint}>
-              {editing ? t("costHint") : t("runAfterSaveHint")}
+              {!canHost ? tEval("skillEvals.host.hint") : editing ? t("costHint") : t("runAfterSaveHint")}
             </span>
             <Button kind="ghost" onClick={onClose}>
               {saved ? t("close") : t("cancel")}
@@ -211,12 +232,16 @@ export function CaseEditorDialog({ agentId, evalCase, onClose }: CaseEditorDialo
               style={s.textarea}
             />
             {!validity.ok && <div style={s.reason}>{t(`json.${validity.reason}`, validity.params)}</div>}
-            <RunResult result={result} errorKey={run.isError ? modalErrorKey(run.error) : null} />
+            <RunResult
+              result={result}
+              errorKey={run.isError ? modalErrorKey(run.error) : null}
+              errorText={run.isError ? errorText(run.error) : null}
+            />
           </div>
         </div>
         {showError && !run.isError && (
           <div role="alert" style={s.error}>
-            {t(`errors.${modalErrorKey(requestError)}`)}
+            {errorText(requestError)}
           </div>
         )}
       </Modal>

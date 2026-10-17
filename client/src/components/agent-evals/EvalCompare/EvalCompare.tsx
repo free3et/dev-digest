@@ -11,24 +11,28 @@ import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Modal } from "@devdigest/ui";
 import { useDialogA11y } from "@/lib/hooks/dialog-a11y";
-import { useEvalRun } from "@/lib/hooks/eval";
-import { sameCaseSet } from "../helpers";
+import { useEvalRun, type EvalHost } from "@/lib/hooks/eval";
+import { EMPTY } from "@/lib/format";
+import { hostLabel, resolveOwner, runVersion, sameCaseSet, type OwnerProps } from "../helpers";
 import { buildCaseRows, caseSetSubtitle, orderRuns } from "./helpers";
 import { CompareRunInfo } from "./CompareRunInfo";
 import { CompareTiles } from "./CompareTiles";
 import { CompareCasesTable } from "./CompareCasesTable";
 import { PromptDiff } from "./PromptDiff";
+import { SkillBodyDiff } from "./SkillBodyDiff";
 import { s } from "./styles";
 
-export function EvalCompare({
-  agentId,
-  runIds,
-  onClose,
-}: {
-  agentId: string;
-  runIds: [string, string];
-  onClose: () => void;
-}) {
+export function EvalCompare(
+  props: OwnerProps & {
+    runIds: [string, string];
+    onClose: () => void;
+    /** Agents by id, for the skill owner's host note; undefined while loading. */
+    hosts?: ReadonlyMap<string, EvalHost>;
+  },
+) {
+  const { runIds, onClose, hosts } = props;
+  const owner = resolveOwner(props);
+  const isSkill = owner.kind === "skill";
   const t = useTranslations("eval");
   const first = useEvalRun(runIds[0]);
   const second = useEvalRun(runIds[1]);
@@ -58,6 +62,11 @@ export function EvalCompare({
     body = <p style={s.muted}>{t("compare.loading")}</p>;
   } else {
     const [a, b] = loaded;
+    const hostName = (r: typeof a) => {
+      const l = hostLabel(hosts, r.agent_id, r.agent_version);
+      return l.kind === "known" ? l.name : l.kind === "deleted" ? t("skillEvals.history.deletedAgent") : EMPTY;
+    };
+    const hostChanged = isSkill && (a.agent_id !== b.agent_id || a.agent_version !== b.agent_version);
     body = (
       <>
         {!sameCaseSet(a.case_ids, b.case_ids) && (
@@ -66,8 +75,24 @@ export function EvalCompare({
           </p>
         )}
         <CompareTiles a={a} b={b} />
-        <CompareRunInfo a={a} b={b} />
-        <PromptDiff agentId={agentId} versionA={a.agent_version} versionB={b.agent_version} />
+        <CompareRunInfo a={a} b={b} kind={owner.kind} hosts={hosts} />
+        {isSkill ? (
+          <>
+            {hostChanged && (
+              <p role="note" style={s.notice}>
+                {t("skillEvals.compare.hostChanged", {
+                  a: hostName(a),
+                  va: a.agent_version,
+                  b: hostName(b),
+                  vb: b.agent_version,
+                })}
+              </p>
+            )}
+            <SkillBodyDiff skillId={owner.id} versionA={runVersion(a, "skill")} versionB={runVersion(b, "skill")} />
+          </>
+        ) : (
+          <PromptDiff agentId={owner.id} versionA={a.agent_version} versionB={b.agent_version} />
+        )}
         <section style={s.wrap} aria-label={t("compare.casesHeading")}>
           <h4 style={s.subheading}>{t("compare.casesHeading")}</h4>
           <CompareCasesTable rows={buildCaseRows(a, b)} />
@@ -79,12 +104,12 @@ export function EvalCompare({
   const setInfo = loaded ? caseSetSubtitle(loaded[0], loaded[1]) : null;
   const subtitle = setInfo
     ? setInfo.same
-      ? t("compare.subtitleCaseSet", { count: setInfo.count })
-      : t("compare.subtitleDifferentSets")
+      ? t(isSkill ? "skillEvals.compare.subtitleCaseSet" : "compare.subtitleCaseSet", { count: setInfo.count })
+      : t(isSkill ? "skillEvals.compare.subtitleDifferentSets" : "compare.subtitleDifferentSets")
     : null;
 
   const title = loaded
-    ? t("compare.titleWithVersions", { a: loaded[0].agent_version, b: loaded[1].agent_version })
+    ? t("compare.titleWithVersions", { a: runVersion(loaded[0], owner.kind), b: runVersion(loaded[1], owner.kind) })
     : t("compare.title");
 
   // Portal to <body> (same reason as EvalCaseModal): the Evals tab sits inside

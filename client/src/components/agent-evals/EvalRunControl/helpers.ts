@@ -24,11 +24,6 @@ export function refusalKey(err: unknown): RefusalKey {
   return BY_CODE.find((k) => k === err.code) ?? "unknown";
 }
 
-/** Newest finished (`done` or `partial`) run; the history is newest first. */
-export function lastFinishedRun(runs: readonly EvalSuiteRun[] | undefined): EvalSuiteRun | undefined {
-  return runs?.find((r) => r.status === "done" || r.status === "partial");
-}
-
 /** Newest run still `running`, found on load from the history. */
 export function runningRun(runs: readonly EvalSuiteRun[] | undefined): EvalSuiteRun | undefined {
   return runs?.find((r) => r.status === "running");

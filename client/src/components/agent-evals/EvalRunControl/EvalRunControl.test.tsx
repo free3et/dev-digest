@@ -178,3 +178,123 @@ describe("helpers", () => {
     expect(casesDone({ cases_completed: 2, cases_errored: 1 })).toBe(3);
   });
 });
+
+describe("EvalRunControl, skill owner (Spec G2)", () => {
+  const HOST = { id: "h1", name: "Reviewer A", model: "gpt-x" };
+  const skillSuite = (over: Partial<EvalSuiteRun> = {}) =>
+    suite({ owner_kind: "skill", skill_id: "s1", skill_version: 3, agent_id: "h1", ...over });
+  const routes = (history: EvalSuiteRun[]) => ({
+    "GET /skills/s1/eval-cases": { body: CASES },
+    "GET /skills/s1/eval-runs": { body: history },
+  });
+
+  it("confirms with count, host, model and last cost; one POST only after confirm, body {agent_id}", async () => {
+    const calls = stub({
+      ...routes([skillSuite({ cost_usd: 0.01 })]),
+      "POST /skills/s1/eval-runs": { status: 202, body: skillSuite({ id: "s2", status: "running", cases_completed: 0 }) },
+      "GET /eval-runs/s2": { body: { ...skillSuite({ id: "s2", status: "running", cases_completed: 0 }), cases: [] } },
+    });
+    renderWithProviders(<EvalRunControl owner={{ kind: "skill", id: "s1" }} host={HOST} />);
+    const run = await screen.findByRole("button", { name: "Run eval (3)" });
+    await vi.waitFor(() => expect(calls).toContain("GET /skills/s1/eval-runs"));
+    await vi.waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    expect(screen.getByText("Run 3 eval cases?")).toBeInTheDocument();
+    expect(screen.getByText(/Runs on Reviewer A · gpt-x\..*cost: \$0\.01\./)).toBeInTheDocument();
+    expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Run eval (3)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run eval" }));
+    expect(await screen.findByText("0 / 3 cases")).toBeInTheDocument();
+    expect(calls.filter((c) => c.startsWith("POST"))).toEqual(["POST /skills/s1/eval-runs"]);
+    expect(calls.some((c) => c.includes("/agents/"))).toBe(false);
+  });
+
+  it("shows — for the last cost when no skill suite finished", async () => {
+    stub(routes([]));
+    renderWithProviders(<EvalRunControl owner={{ kind: "skill", id: "s1" }} host={HOST} />);
+    const run = await screen.findByRole("button", { name: "Run eval (3)" });
+    await vi.waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    expect(screen.getByText(/cost: —\./)).toBeInTheDocument();
+  });
+
+  it("sends the host's agent_id in the POST body", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = String(url).replace(/^https?:\/\/[^/]+/, "");
+        if (init?.method === "POST") {
+          bodies.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify(skillSuite({ id: "s2", status: "running" })), { status: 202 });
+        }
+        if (path === "/skills/s1/eval-cases") return new Response(JSON.stringify(CASES));
+        if (path === "/skills/s1/eval-runs") return new Response("[]");
+        return new Response(JSON.stringify({ ...skillSuite({ id: "s2", status: "running" }), cases: [] }));
+      }),
+    );
+    renderWithProviders(<EvalRunControl owner={{ kind: "skill", id: "s1" }} host={HOST} />);
+    const run = await screen.findByRole("button", { name: "Run eval (3)" });
+    await vi.waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    fireEvent.click(screen.getByRole("button", { name: "Run eval" }));
+    await vi.waitFor(() => expect(bodies).toEqual([{ agent_id: "h1" }]));
+  });
+
+  it("is disabled with no host and points at the hint", async () => {
+    stub(routes([]));
+    renderWithProviders(
+      <>
+        <p id="hint">Pick an agent to run this skill's evals</p>
+        <EvalRunControl owner={{ kind: "skill", id: "s1" }} host={null} runHintId="hint" />
+      </>,
+    );
+    const run = await screen.findByRole("button", { name: "Run eval (3)" });
+    expect(run).toBeDisabled();
+    expect(run).toHaveAccessibleDescription(/Pick an agent/);
+  });
+
+  it("shows the skill refusal text for 409 eval_run_in_progress and stays usable", async () => {
+    stub({
+      ...routes([]),
+      "POST /skills/s1/eval-runs": { status: 409, body: { error: { code: "eval_run_in_progress", message: "m" } } },
+    });
+    renderWithProviders(<EvalRunControl owner={{ kind: "skill", id: "s1" }} host={HOST} />);
+    const run = await screen.findByRole("button", { name: "Run eval (3)" });
+    await vi.waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    fireEvent.click(screen.getByRole("button", { name: "Run eval" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/run of this skill is already in progress/);
+    expect(screen.getByRole("button", { name: "Run eval (3)" })).toBeEnabled();
+  });
+});
+
+describe("EvalRunControl heading-row mode (Spec G3 AC-2)", () => {
+  it("label=runAll reads 'Run all evals', keeps the confirm with the case count, and orders heading, button, actions", async () => {
+    const calls = stub({
+      "GET /agents/ag1/eval-cases": { body: CASES },
+      "GET /agents/ag1/eval-runs": { body: [suite()] },
+    });
+    renderWithProviders(
+      <EvalRunControl
+        agentId="ag1"
+        label="runAll"
+        heading={<h3>Eval cases</h3>}
+        actions={<button type="button">New eval case</button>}
+      />,
+    );
+    const run = await screen.findByRole("button", { name: "Run all evals" });
+    expect(screen.queryByText(/Run eval \(/)).toBeNull();
+    const heading = screen.getByRole("heading", { name: "Eval cases" });
+    const actions = screen.getByRole("button", { name: "New eval case" });
+    expect(heading.compareDocumentPosition(run) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(run.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await vi.waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    expect(screen.getByText("Run 3 eval cases?")).toBeInTheDocument();
+    expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+  });
+});

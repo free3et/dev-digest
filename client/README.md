@@ -29,7 +29,7 @@ flowchart TD
 
   CONTEXT["/repos/:repoId/context<br/>Project Context<br/>(list · preview · edit)"]
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills)"]
-  SKILLS["/skills<br/>cards · preview · editor · import"]
+  SKILLS["/skills<br/>cards · preview · editor · import<br/>Evals tab (?tab=evals) · Run on evals"]
   SETTINGS["/settings/:section<br/>API keys · models"]
   EVALS["/eval<br/>Eval Dashboard"]
   EVALPAGE["/eval/:agentId<br/>per-agent eval page<br/>(cards · trend · runs · compare)"]
@@ -55,7 +55,8 @@ Eval pipeline UI (the "Turn into eval case" control on `FindingCard` and the
 `EvalCaseModal` it opens (draft, edit, dry-run, save), the agent Evals tab with
 its regression banner and compare dialog, the `/eval` dashboard with recent
 runs and recall sparklines, and the per-agent eval page `/eval/:agentId` with
-metric cards and a trend chart): [`docs/eval-ui.md`](docs/eval-ui.md).
+metric cards and a trend chart; the skill Evals tab and Run on evals reuse the
+shared `agent-evals` parts with an owner prop): [`docs/eval-ui.md`](docs/eval-ui.md).
 
 ## Testing
 

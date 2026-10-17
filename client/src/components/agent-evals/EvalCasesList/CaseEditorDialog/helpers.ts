@@ -1,5 +1,14 @@
 import type { EvalCase, EvalCaseDraft, EvalExpectationInput } from "@devdigest/shared";
-import { toJsonText, validateExpectationText, type JsonValidity } from "@/components/finding-card/EvalCaseControl/EvalCaseModal/helpers";
+import { ApiError } from "@/lib/api";
+import type { EvalOwner } from "@/lib/hooks/eval";
+import {
+  modalErrorKey,
+  toJsonText,
+  validateExpectationText,
+  type JsonValidity,
+  type ModalErrorKey,
+} from "@/components/finding-card/EvalCaseControl/EvalCaseModal/helpers";
+import { skillRefusalKey, type SkillRefusalKey } from "../../helpers";
 
 /** The expectation a hand-written case starts from ("Finding skeleton"). */
 export const NEW_CASE_SKELETON: EvalExpectationInput = {
@@ -37,4 +46,32 @@ export function validateCaseJson(text: string, frozenFile: string | null): JsonV
     expected_output: { kind },
   } as Pick<EvalCaseDraft, "input_files" | "expected_output">;
   return validateExpectationText(text, draft);
+}
+
+const SKILL_CODES: readonly string[] = [
+  "host_required",
+  "host_not_found",
+  "host_not_allowed",
+  "not_agent_case",
+  "eval_run_in_progress",
+  "no_cases",
+  "too_many_cases",
+  "invalid_diff",
+  "not_found",
+];
+
+export type EditorErrorKey =
+  | { scope: "editor"; key: ModalErrorKey }
+  | { scope: "skill"; key: SkillRefusalKey };
+
+/**
+ * Which text a failed editor request shows. A skill owner gets the skill
+ * wording (`skillEvals.refusals.*`) for the G1 codes; everything else, and every
+ * agent owner, keeps the editor's own mapping (`modalErrorKey`).
+ */
+export function editorErrorKey(owner: EvalOwner, err: unknown): EditorErrorKey {
+  if (owner.kind === "skill" && err instanceof ApiError && SKILL_CODES.includes(err.code ?? "")) {
+    return { scope: "skill", key: skillRefusalKey(err) };
+  }
+  return { scope: "editor", key: modalErrorKey(err) };
 }

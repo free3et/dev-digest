@@ -89,3 +89,12 @@ describe("regressionBanner", () => {
     expect(regressionBanner([base, run({ case_ids: ["c2", "c1"] })])?.differentCaseSets).toBe(false);
   });
 });
+
+describe("regressionBanner with a version getter (Spec G2 AC-12)", () => {
+  it("reports the skill version when the getter picks it, and the agent version by default", () => {
+    const newest = { ...run({ precision: 0.78, agent_version: 7 }), skill_version: 3 };
+    const prev = { ...run({ agent_version: 6 }), skill_version: 2 };
+    expect(regressionBanner([newest, prev], (r) => r.skill_version ?? r.agent_version)?.version).toBe(3);
+    expect(regressionBanner([newest, prev])?.version).toBe(7);
+  });
+});

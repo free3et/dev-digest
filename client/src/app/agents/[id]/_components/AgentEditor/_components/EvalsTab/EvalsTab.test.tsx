@@ -75,7 +75,8 @@ describe("EvalsTab", () => {
     expect(screen.getByRole("region", { name: "Eval metrics" }).contains(dialog)).toBe(false);
     expect(screen.getByRole("region", { name: "Recent runs" })).toBeInTheDocument();
     expect(await within(dialog).findByRole("group", { name: "Metric comparison" })).toBeInTheDocument();
-    expect(calls.filter((c) => c.path.startsWith("/eval-runs/")).map((c) => c.path).sort()).toEqual([
+    // Spec G3 NFR-2: the case list also reads the reference suite ("new"), so compare the set of runs read.
+    expect([...new Set(calls.filter((c) => c.path.startsWith("/eval-runs/")).map((c) => c.path))].sort()).toEqual([
       "/eval-runs/new",
       "/eval-runs/old",
     ]);
@@ -151,5 +152,34 @@ describe("EvalsTab", () => {
     release();
     expect(await screen.findByText("Couldn’t load run history")).toBeInTheDocument();
     expect(screen.queryByRole("note", { name: "Regression" })).toBeNull();
+  });
+});
+
+describe("EvalsTab regression guard (Spec G2 AC-14)", () => {
+  it("requests only the agent routes: nothing under /skills/ and no agent list", async () => {
+    const calls = mockFetch({
+      "GET /agents/ag1/eval-cases": [],
+      "GET /agents/ag1/eval-runs": [NEW, OLD],
+    });
+    renderWithProviders(<EvalsTab agentId="ag1" />);
+    await screen.findByRole("button", { name: "Compare" });
+    const paths = calls.map((c) => c.path);
+    expect(paths.some((p) => p.startsWith("/skills/"))).toBe(false);
+    expect(paths).not.toContain("/agents");
+    expect(screen.queryByRole("combobox", { name: "Host agent" })).toBeNull();
+    expect(screen.getByRole("cell", { name: "v1" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Host" })).toBeNull();
+  });
+});
+
+describe("EvalsTab case-list heading row (Spec G3 AC-2, AC-10)", () => {
+  it("has no standalone 'Run eval (n)': Run all evals and New eval case sit in the Eval cases section", async () => {
+    mockFetch({ "GET /agents/ag1/eval-cases": [], "GET /agents/ag1/eval-runs": [] });
+    renderWithProviders(<EvalsTab agentId="ag1" />);
+    const section = await screen.findByRole("region", { name: "Eval cases" });
+    expect(within(section).getByRole("button", { name: "Run all evals" })).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "New eval case" })).toBeInTheDocument();
+    expect(screen.queryByText(/Run eval \(/)).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Run all evals" })).toHaveLength(1);
   });
 });

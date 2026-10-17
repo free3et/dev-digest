@@ -15,6 +15,12 @@ import {
   useEvalRecentRuns,
   useEvalRun,
   useStartEvalRun,
+  useCopyEvalCaseToSkill,
+  useCreateSkillManualEvalCase,
+  useRunEvalCase,
+  useSkillEvalCases,
+  useSkillEvalRuns,
+  useStartSkillEvalRun,
 } from "./eval";
 
 afterEach(() => {
@@ -245,5 +251,103 @@ describe("eval hooks", () => {
       await qc.invalidateQueries({ queryKey: ["eval-dashboard"] });
     });
     await waitFor(() => expect(calls).toHaveLength(2));
+  });
+});
+
+describe("skill eval hooks", () => {
+  it("reads skill cases and runs under their own keys and stays idle without an id", async () => {
+    const calls = mockFetch({
+      "GET /skills/s1/eval-cases": [CASE],
+      "GET /skills/s1/eval-runs": [suite({ status: "done", owner_kind: "skill", skill_id: "s1" })],
+    });
+    const { qc, wrapper } = setup();
+    const cases = renderHook(() => useSkillEvalCases("s1"), { wrapper });
+    const runs = renderHook(() => useSkillEvalRuns("s1"), { wrapper });
+    await waitFor(() => expect(cases.result.current.data).toEqual([CASE]));
+    await waitFor(() => expect(runs.result.current.data).toHaveLength(1));
+    expect(qc.getQueryData(["skill-eval-cases", "s1"])).toEqual([CASE]);
+    expect(qc.getQueryData(["skill-eval-runs", "s1"])).toHaveLength(1);
+
+    calls.length = 0;
+    renderHook(() => useSkillEvalCases(null), { wrapper });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("starts a skill run with {agent_id}, prepends it to the skill history and leaves the dashboard alone", async () => {
+    const created = suite({ id: "r9", owner_kind: "skill", skill_id: "s1", skill_version: 3 });
+    const calls = mockFetch({ "POST /skills/s1/eval-runs": created });
+    const { qc, wrapper } = setup();
+    qc.setQueryData(["skill-eval-runs", "s1"], [suite({ id: "r1", status: "done" })]);
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useStartSkillEvalRun("s1"), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync("h1");
+    });
+    expect(calls[0]).toMatchObject({ method: "POST", path: "/skills/s1/eval-runs", body: { agent_id: "h1" } });
+    expect((qc.getQueryData(["skill-eval-runs", "s1"]) as EvalSuiteRun[]).map((r) => r.id)).toEqual(["r9", "r1"]);
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["skill-eval-runs", "s1"] });
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ["eval-dashboard"] });
+  });
+
+  it("creates a skill case and copies an agent case, refetching the skill list", async () => {
+    const calls = mockFetch({ "POST /skills/s1/eval-cases": CASE, "POST /skills/s1/eval-cases/copy": CASE });
+    const { qc, wrapper } = setup();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    const create = renderHook(() => useCreateSkillManualEvalCase("s1"), { wrapper });
+    const copy = renderHook(() => useCopyEvalCaseToSkill("s1"), { wrapper });
+    await act(async () => {
+      await create.result.current.mutateAsync({ name: "n", patch: "@@", expected_output: {} as never });
+      await copy.result.current.mutateAsync("c1");
+    });
+    expect(calls[1]).toMatchObject({ path: "/skills/s1/eval-cases/copy", body: { case_id: "c1" } });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["skill-eval-cases", "s1"] });
+  });
+
+  it("sends agent_id with a case run only when given", async () => {
+    const calls = mockFetch({ "POST /eval-cases/c1/run": {} });
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useRunEvalCase(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ caseId: "c1" });
+      await result.current.mutateAsync({ caseId: "c1", agentId: "h1" });
+    });
+    expect(calls[0]?.body).toEqual({});
+    expect(calls[1]?.body).toEqual({ agent_id: "h1" });
+  });
+
+  it("refetches agents when a skill start is refused with host_not_found", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { code: "host_not_found", message: "x" } }), { status: 422 })),
+    );
+    const { qc, wrapper } = setup();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useStartSkillEvalRun("s1"), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync("h1").catch(() => undefined);
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["agents"] });
+  });
+
+  it("a skill suite leaving running refreshes the skill history only", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let n = 0;
+    mockFetch({
+      "GET /eval-runs/r1": () => {
+        n += 1;
+        const base = suite({ owner_kind: "skill", skill_id: "s1", skill_version: 2 });
+        return n < 2 ? { ...base, cases: [] } : { ...base, status: "done", cases: [] };
+      },
+    });
+    const { qc, wrapper } = setup();
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useEvalRun("r1"), { wrapper });
+    await waitFor(() => expect(result.current.data?.status).toBe("running"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["skill-eval-runs", "s1"] }));
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ["eval-runs", "a1"] });
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: ["eval-dashboard"] });
   });
 });

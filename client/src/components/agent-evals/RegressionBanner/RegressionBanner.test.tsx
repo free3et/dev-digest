@@ -50,3 +50,17 @@ describe("RegressionBanner look", () => {
     expect(note.style.background).toContain("var(--warn-bg)");
   });
 });
+
+describe("RegressionBanner, skill owner (Spec G2 AC-12)", () => {
+  it("reads skill suites and names the skill version", async () => {
+    const calls = mockFetch({
+      "GET /skills/s1/eval-runs": [
+        run("new", "2026-10-12T10:00:00Z", { precision: 0.78, owner_kind: "skill", skill_id: "s1", skill_version: 3 }),
+        run("old", "2026-10-11T10:00:00Z", { owner_kind: "skill", skill_id: "s1", skill_version: 2 }),
+      ],
+    });
+    renderWithProviders(<RegressionBanner owner={{ kind: "skill", id: "s1" }} />);
+    expect(await screen.findByRole("note", { name: "Regression" })).toHaveTextContent("Precision dipped 2 pts on v3.");
+    expect(calls.map((c) => c.path)).toEqual(["/skills/s1/eval-runs"]);
+  });
+});

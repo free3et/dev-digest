@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 export const s = {
   wrap: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
   headingRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 } satisfies CSSProperties,
+  actions: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } satisfies CSSProperties,
   heading: { fontSize: 14, fontWeight: 600, margin: 0 } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
   list: {
@@ -25,6 +26,18 @@ export const s = {
     borderColor: "var(--border)",
   } satisfies CSSProperties,
   rowMain: { display: "flex", alignItems: "center", gap: 12, minWidth: 0 } satisfies CSSProperties,
+  statusIcon: { display: "inline-flex", flexShrink: 0 } satisfies CSSProperties,
+  // What the case asserts; bounded so a long category cannot push the buttons out.
+  assert: {
+    flexShrink: 0,
+    maxWidth: 220,
+    minWidth: 0,
+    fontSize: 12,
+    color: "var(--text-secondary)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies CSSProperties,
   badgeWrap: { display: "inline-flex", flexShrink: 0 } satisfies CSSProperties,
   // Long names and paths must not wrap one word per line (client INSIGHTS 2026-09-26).
   name: {
@@ -60,4 +73,18 @@ export const s = {
 /** Tone as a 1 px border (longhands) + tint; the text stays `--text-primary` (NFR-1). */
 export function kindBadgeStyle(tone: "ok" | "warn"): CSSProperties {
   return { borderWidth: 1, borderStyle: "solid", borderColor: `var(--${tone})` };
+}
+
+/** Icon colour per status; the shape and the accessible name carry the meaning (NFR-1). */
+export function statusColor(status: "passed" | "failed" | "errored" | "neverRun"): string {
+  switch (status) {
+    case "passed":
+      return "var(--ok)";
+    case "failed":
+      return "var(--crit)";
+    case "errored":
+      return "var(--warn)";
+    default:
+      return "var(--text-secondary)";
+  }
 }

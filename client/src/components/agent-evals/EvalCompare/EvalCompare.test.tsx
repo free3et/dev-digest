@@ -359,3 +359,59 @@ describe("EvalCompare", () => {
     expect(footerClose).toHaveFocus();
   });
 });
+
+describe("EvalCompare, skill owner (Spec G2 AC-13)", () => {
+  const hosts = new Map([
+    ["h1", { id: "h1", name: "Reviewer A", model: "gpt-x" }],
+    ["h2", { id: "h2", name: "Reviewer B", model: "gpt-y" }],
+  ]);
+  const skillRun = (over: Partial<EvalSuiteRunDetail>) =>
+    detail({ owner_kind: "skill", skill_id: "s1", agent_id: "h1", agent_version: 6, case_ids: ["c1"], ...over });
+  const OLD_S = skillRun({ id: "old", skill_version: 2, ran_at: "2026-10-10T10:00:00.000Z" });
+  const NEW_S = skillRun({ id: "new", skill_version: 3, ran_at: "2026-10-12T10:00:00.000Z" });
+  const versions = [
+    { version: 3, body: "Be strict.\nCheck authz.", created_at: "x" },
+    { version: 2, body: "Be strict.\nCheck auth.", created_at: "x" },
+  ];
+
+  it("titles with skill versions, diffs the skill body and never asks for agent versions", async () => {
+    const calls = stub({
+      "/eval-runs/old": { body: OLD_S },
+      "/eval-runs/new": { body: NEW_S },
+      "/skills/s1/versions": { body: versions },
+    });
+    renderWithProviders(<EvalCompare owner={{ kind: "skill", id: "s1" }} hosts={hosts} runIds={["new", "old"]} onClose={() => {}} />);
+    expect(await screen.findByRole("dialog", { name: "Compare runs · v2 → v3" })).toBeInTheDocument();
+    expect(screen.getByText("Old skill body vs new — metric deltas and body diff on the 1-case set")).toBeInTheDocument();
+    expect(screen.getByText("Skill body diff")).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", { name: "Skill version" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Show diff" }));
+    const lines = screen.getAllByRole("listitem").map((l) => l.textContent);
+    expect(lines).toEqual(expect.arrayContaining(["−Check auth.", "+Check authz."]));
+    expect(calls.some((c) => c.includes("/agents/"))).toBe(false);
+    // same host and version: no note
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("notes a host change by name and version", async () => {
+    stub({
+      "/eval-runs/old": { body: OLD_S },
+      "/eval-runs/new": { body: { ...NEW_S, agent_version: 7 } },
+      "/skills/s1/versions": { body: versions },
+    });
+    renderWithProviders(<EvalCompare owner={{ kind: "skill", id: "s1" }} hosts={hosts} runIds={["old", "new"]} onClose={() => {}} />);
+    expect(await screen.findByRole("note")).toHaveTextContent("Host changed: Reviewer A v6 → Reviewer A v7");
+  });
+
+  it("same skill version on different hosts: no body diff, the note stays", async () => {
+    const calls = stub({
+      "/eval-runs/old": { body: OLD_S },
+      "/eval-runs/new": { body: { ...OLD_S, id: "new", agent_id: "h2", ran_at: "2026-10-12T10:00:00.000Z" } },
+    });
+    renderWithProviders(<EvalCompare owner={{ kind: "skill", id: "s1" }} hosts={hosts} runIds={["old", "new"]} onClose={() => {}} />);
+    expect(await screen.findByText("Same skill body")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Host changed: Reviewer A v6 → Reviewer B v6");
+    expect(screen.queryByRole("button", { name: "Show diff" })).toBeNull();
+    expect(calls.some((c) => c.includes("/versions"))).toBe(false);
+  });
+});

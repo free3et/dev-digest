@@ -189,7 +189,6 @@
     "run": "Run",
     "running": "Running…",
     "edit": "Edit",
-    "delete": "Delete",
     "deleteCase": "Delete eval case “{name}”",
     "kind": {
       "must_find": "Must find",
@@ -235,16 +234,30 @@
     "noCostYet": "—",
     "casesLoadErrorTitle": "Couldn’t load eval cases",
     "casesLoadErrorBody": "The eval cases could not be loaded.",
-    "runCase": "Run",
     "runCaseName": "Run eval case “{name}”",
     "runningCase": "Running…",
-    "editCase": "Edit",
     "editCaseName": "Edit eval case “{name}”",
     "runResult": {
       "passed": "Passed",
       "failed": "Failed",
       "error": "Error: {error}",
       "detail": "{kept, plural, one {# finding} other {# findings}} kept · {cost}"
+    },
+    "passingCount": "Eval cases · {passed}/{total} passing",
+    "runAll": "Run all evals",
+    "row": {
+      "status": {
+        "passed": "Passed",
+        "failed": "Failed",
+        "errored": "Errored",
+        "neverRun": "Never run"
+      },
+      "expected": "expected {count, plural, =0 {0 findings} one {# finding} other {# findings}}, got {got}",
+      "neverRun": "never run",
+      "errored": "errored",
+      "withLocation": "{text} · {file}:{line}",
+      "severityCategory": "{severity} · {category}",
+      "assertEmpty": "assert empty"
     }
   },
   "page": {
@@ -428,6 +441,62 @@
       },
       "tooltipHeader": "v{version} · <time></time>",
       "tooltipMetric": "{metric} {value}"
+    }
+  },
+  "skillEvals": {
+    "title": "Skill evals",
+    "subtitle": "Recall / Precision / Citation for this skill's eval cases, run through a host agent",
+    "host": {
+      "label": "Host agent",
+      "none": "No agent",
+      "option": "{name} · {model}",
+      "hint": "Pick an agent to run this skill's evals"
+    },
+    "emptyCases": "No eval cases for this skill yet. Write one by hand or copy an agent's case.",
+    "confirm": {
+      "body": "Runs on {host} · {model}. This calls the model once per case. Last finished run cost: {cost}."
+    },
+    "copy": {
+      "open": "Copy from agent case",
+      "title": "Copy an agent's eval case",
+      "subtitle": "The copy belongs to this skill; the agent's case stays unchanged",
+      "caseName": "Copy eval case “{name}”",
+      "loading": "Loading cases…",
+      "empty": "No agent has eval cases yet.",
+      "loadError": "Couldn’t load the agents' cases.",
+      "close": "Close"
+    },
+    "refusals": {
+      "host_required": "Pick a host agent first (host_required).",
+      "host_not_found": "The host agent no longer exists. Pick another one (host_not_found).",
+      "host_not_allowed": "This case belongs to an agent and runs on it (host_not_allowed).",
+      "not_agent_case": "Only an agent's case can be copied (not_agent_case).",
+      "eval_run_in_progress": "A run of this skill is already in progress (eval_run_in_progress).",
+      "no_cases": "This skill has no eval cases (no_cases).",
+      "too_many_cases": "This skill has 100 eval cases, the maximum (too_many_cases).",
+      "invalid_diff": "The diff must contain at least one @@ hunk (invalid_diff).",
+      "not_found": "Skill or case not found (not_found).",
+      "rate_limited": "Too many requests. Try again in a minute (rate_limited).",
+      "network_error": "Could not reach the server. Check the connection and retry.",
+      "unknown": "The request failed."
+    },
+    "history": {
+      "host": "Host",
+      "hostCell": "{name} v{version}",
+      "deletedAgent": "Deleted agent"
+    },
+    "compare": {
+      "subtitleCaseSet": "Old skill body vs new — metric deltas and body diff on the {count}-case set",
+      "subtitleDifferentSets": "Old skill body vs new — metric deltas and body diff on different case sets",
+      "skillVersion": "Skill version",
+      "host": "Host",
+      "hostChanged": "Host changed: {a} v{va} → {b} v{vb}",
+      "bodyDiff": {
+        "title": "Skill body diff",
+        "same": "Same skill body",
+        "loading": "Loading skill versions…",
+        "loadError": "Couldn’t load the skill versions."
+      }
     }
   }
 }
