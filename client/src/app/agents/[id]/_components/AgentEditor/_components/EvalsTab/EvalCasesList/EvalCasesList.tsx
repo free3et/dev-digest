@@ -9,7 +9,9 @@ import { Badge, Button, ErrorState, Modal } from "@devdigest/ui";
 import type { EvalCase } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
 import { EVAL_CAPTION_STYLE } from "@/components/eval-metric";
-import { useAgentEvalCases, useDeleteEvalCase } from "@/lib/hooks/eval";
+import { formatCostUsd } from "@/lib/format";
+import { useAgentEvalCases, useDeleteEvalCase, useRunEvalCase } from "@/lib/hooks/eval";
+import { CaseEditorDialog } from "./CaseEditorDialog";
 import { s, kindBadgeStyle } from "./styles";
 
 const REFUSAL_KEYS = ["eval_run_in_progress", "not_found", "network_error"] as const;
@@ -24,7 +26,10 @@ export function EvalCasesList({ agentId }: { agentId: string }) {
   const t = useTranslations("eval");
   const cases = useAgentEvalCases(agentId);
   const del = useDeleteEvalCase(agentId);
+  const run = useRunEvalCase();
   const [pendingDelete, setPendingDelete] = React.useState<EvalCase | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [editing, setEditing] = React.useState<EvalCase | null>(null);
 
   const confirmDelete = () => {
     if (!pendingDelete) return;
@@ -68,6 +73,25 @@ export function EvalCasesList({ agentId }: { agentId: string }) {
                 <Button
                   kind="ghost"
                   size="sm"
+                  aria-label={t("evalsTab.runCaseName", { name: c.name })}
+                  loading={run.isPending && run.variables?.caseId === c.id}
+                  disabled={run.isPending}
+                  onClick={() => run.mutate({ caseId: c.id })}
+                >
+                  {t("evalsTab.runCase")}
+                </Button>
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  icon="Edit"
+                  aria-label={t("evalsTab.editCaseName", { name: c.name })}
+                  onClick={() => setEditing(c)}
+                >
+                  {t("evalsTab.editCase")}
+                </Button>
+                <Button
+                  kind="ghost"
+                  size="sm"
                   icon="Trash"
                   aria-label={t("evalsTab.deleteCase", { name: c.name })}
                   disabled={del.isPending}
@@ -82,6 +106,25 @@ export function EvalCasesList({ agentId }: { agentId: string }) {
               <span className="mono" style={s.location} title={location}>
                 {location}
               </span>
+              {run.variables?.caseId === c.id && run.data && (
+                <p role="status" style={s.runResult}>
+                  <strong>
+                    {run.data.outcome === "error"
+                      ? t("evalsTab.runResult.error", { error: run.data.error ?? "" })
+                      : t(`evalsTab.runResult.${run.data.outcome}`)}
+                  </strong>
+                  {run.data.outcome !== "error" &&
+                    ` · ${t("evalsTab.runResult.detail", {
+                      kept: run.data.findings_kept ?? 0,
+                      cost: formatCostUsd(run.data.cost_usd),
+                    })}`}
+                </p>
+              )}
+              {run.variables?.caseId === c.id && run.isError && (
+                <p role="alert" style={s.error}>
+                  {t(`evalsTab.refusals.${refusalKey(run.error)}`)}
+                </p>
+              )}
               {failed && (
                 <p role="alert" style={s.error}>
                   {t(`evalsTab.refusals.${refusalKey(del.error)}`)}
@@ -96,8 +139,15 @@ export function EvalCasesList({ agentId }: { agentId: string }) {
 
   return (
     <section style={s.wrap} aria-label={t("evalsTab.casesHeading")}>
-      <h3 style={s.heading}>{t("evalsTab.casesHeading")}</h3>
+      <div style={s.headingRow}>
+        <h3 style={s.heading}>{t("evalsTab.casesHeading")}</h3>
+        <Button kind="primary" size="sm" icon="Plus" onClick={() => setCreating(true)}>
+          {t("evalsTab.newCase")}
+        </Button>
+      </div>
       {body}
+      {creating && <CaseEditorDialog agentId={agentId} onClose={() => setCreating(false)} />}
+      {editing && <CaseEditorDialog agentId={agentId} evalCase={editing} onClose={() => setEditing(null)} />}
       {pendingDelete && (
         <Modal
           width={420}

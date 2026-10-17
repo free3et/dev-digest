@@ -161,14 +161,25 @@
       "rate_limited": "Too many requests. Try again in a minute (rate_limited).",
       "payload_too_large": "The request is too large (payload_too_large).",
       "network_error": "Could not reach the server. Check the connection and retry.",
-      "unknown": "The request failed."
-    }
+      "unknown": "The request failed.",
+      "invalid_diff": "The diff must contain at least one @@ hunk.",
+      "too_many_cases": "This agent already has the maximum number of eval cases.",
+      "eval_run_in_progress": "An eval run of this agent is in progress. Try again when it finishes."
+    },
+    "editSubtitle": "Edit the name and the expected output · the frozen input stays",
+    "newSubtitle": "Write a case by hand · paste the diff of one file",
+    "newTitle": "New eval case",
+    "runOnSave": "Run on save",
+    "close": "Close",
+    "diffEditLabel": "Diff (hunks starting at @@)",
+    "runAfterSaveHint": "Save the case first, or turn on Run on save",
+    "savedBadge": "Saved"
   },
   "evalsTab": {
     "metricsTitle": "Eval metrics",
     "metricsSubtitle": "Recall / Precision / Citation for this agent's eval cases",
     "casesHeading": "Eval cases",
-    "newCase": "New case",
+    "newCase": "New eval case",
     "loadingCases": "Loading cases…",
     "emptyCases": "No eval cases yet. Create one to assert this agent's expected findings on a sample diff.",
     "neverRun": "never run",
@@ -181,8 +192,8 @@
     "delete": "Delete",
     "deleteCase": "Delete eval case “{name}”",
     "kind": {
-      "must_find": "Positive",
-      "must_not_flag": "Negative",
+      "must_find": "Must find",
+      "must_not_flag": "Must not flag",
       "must_findName": "Positive case · must find",
       "must_not_flagName": "Negative case · must not flag"
     },
@@ -223,7 +234,18 @@
     "lastRun": "Last run",
     "noCostYet": "—",
     "casesLoadErrorTitle": "Couldn’t load eval cases",
-    "casesLoadErrorBody": "The eval cases could not be loaded."
+    "casesLoadErrorBody": "The eval cases could not be loaded.",
+    "runCase": "Run",
+    "runCaseName": "Run eval case “{name}”",
+    "runningCase": "Running…",
+    "editCase": "Edit",
+    "editCaseName": "Edit eval case “{name}”",
+    "runResult": {
+      "passed": "Passed",
+      "failed": "Failed",
+      "error": "Error: {error}",
+      "detail": "{kept, plural, one {# finding} other {# findings}} kept · {cost}"
+    }
   },
   "page": {
     "crumbSkillsLab": "Skills Lab",

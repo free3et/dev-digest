@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 export const s = {
   wrap: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
+  headingRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 } satisfies CSSProperties,
   heading: { fontSize: 14, fontWeight: 600, margin: 0 } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
   list: {
@@ -44,6 +45,7 @@ export const s = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   } satisfies CSSProperties,
+  runResult: { fontSize: 12, color: "var(--text-secondary)", margin: 0 } satisfies CSSProperties,
   error: { fontSize: 12, color: "var(--crit)", margin: 0 } satisfies CSSProperties,
   modalBody: {
     margin: 0,

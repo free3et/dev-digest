@@ -12,4 +12,7 @@ export const MODAL_ERROR_CODES = [
   "validation_error",
   "file_not_in_diff",
   "kind_mismatch",
+  "invalid_diff",
+  "too_many_cases",
+  "eval_run_in_progress",
 ] as const;

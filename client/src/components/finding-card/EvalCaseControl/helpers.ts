@@ -26,7 +26,7 @@ export function evalControlState(
   if (!agentId) return NONE;
   const decided = !!f.accepted_at || !!f.dismissed_at;
   if (!decided) return NONE;
-  if (cases.some((c) => c.expected_output.source.finding_id === f.id)) {
+  if (cases.some((c) => c.expected_output.source?.finding_id === f.id)) {
     return { kind: "link", href: evalsTabHref(agentId) };
   }
   return { kind: "button", expectation: f.accepted_at ? "must_find" : "must_not_flag" };

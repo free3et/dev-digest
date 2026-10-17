@@ -8,6 +8,7 @@ import { api } from "../api";
 import type {
   EvalCase,
   EvalCaseDraft,
+  EvalCaseManualCreate,
   EvalCaseOverrides,
   EvalDashboardRow,
   EvalDryRunResult,
@@ -83,6 +84,44 @@ export function useDeleteEvalCase(agentId: string | null | undefined) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["eval-cases", agentId] });
     },
+  });
+}
+
+/** Create a case by hand (`POST /agents/:id/eval-cases`); refetches the list. */
+export function useCreateManualEvalCase(agentId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EvalCaseManualCreate) => api.post<EvalCase>(`/agents/${agentId}/eval-cases`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["eval-cases", agentId] });
+    },
+  });
+}
+
+/** Edit a case's name / expectation (`PATCH /eval-cases/:id`); refetches the list. */
+export function useUpdateEvalCase(agentId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ caseId, body }: { caseId: string; body: EvalCaseOverrides }) =>
+      api.patch<EvalCase>(`/eval-cases/${caseId}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["eval-cases", agentId] });
+    },
+  });
+}
+
+/**
+ * Run ONE stored case (`POST /eval-cases/:id/run`): stateless like the dry-run,
+ * nothing stored, so nothing is invalidated. `expectedOutput` overrides the
+ * expectation for scoring only. One paid model call per click.
+ */
+export function useRunEvalCase() {
+  return useMutation({
+    mutationFn: ({ caseId, expectedOutput }: { caseId: string; expectedOutput?: EvalExpectationInput }) =>
+      api.post<EvalDryRunResult>(
+        `/eval-cases/${caseId}/run`,
+        expectedOutput ? { expected_output: expectedOutput } : {},
+      ),
   });
 }
 

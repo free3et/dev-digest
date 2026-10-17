@@ -19,6 +19,7 @@ vi.mock("../../../../../lib/hooks/eval", () => ({
   useEvalRun: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
   useStartEvalRun: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
   useDeleteEvalCase: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false }),
+  useRunEvalCase: () => ({ mutate: vi.fn(), isPending: false, isError: false, data: undefined, variables: undefined }),
 }));
 
 import { AgentEditor } from "./AgentEditor";

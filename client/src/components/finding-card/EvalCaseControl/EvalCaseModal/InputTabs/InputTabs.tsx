@@ -9,7 +9,11 @@ import type { EvalCaseDraft } from "@devdigest/shared";
 import { INPUT_TABS, type InputTab } from "../constants";
 import { s } from "./styles";
 
-export function InputTabs({ draft }: { draft: EvalCaseDraft }) {
+export function InputTabs({
+  draft,
+}: {
+  draft: Pick<EvalCaseDraft, "input_diff" | "input_files" | "input_meta">;
+}) {
   const t = useTranslations("eval.caseEditor");
   const [tab, setTab] = useState<InputTab>("diff");
   const uid = useId();

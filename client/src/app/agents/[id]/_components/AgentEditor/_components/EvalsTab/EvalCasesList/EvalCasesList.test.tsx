@@ -50,8 +50,8 @@ describe("EvalCasesList", () => {
     mockFetch({ "GET /agents/ag1/eval-cases": CASES });
     renderWithProviders(<EvalCasesList agentId="ag1" />);
     expect(screen.getByText("Loading cases…")).toBeInTheDocument();
-    expect(await screen.findByText("Positive")).toBeInTheDocument();
-    expect(screen.getByText("Negative")).toBeInTheDocument();
+    expect(await screen.findByText("Must find")).toBeInTheDocument();
+    expect(screen.getByText("Must not flag")).toBeInTheDocument();
     expect(screen.queryByText("must find")).toBeNull();
     expect(screen.queryByText("must not flag")).toBeNull();
     expect(screen.getByText("src/a.ts:12")).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("EvalCasesList", () => {
     renderWithProviders(<EvalCasesList agentId="ag1" />);
     expect(await screen.findByLabelText("Positive case · must find")).toBeInTheDocument();
     expect(screen.getByTitle("Negative case · must not flag")).toBeInTheDocument();
-    expect(screen.getByText("Positive").style.textTransform).toBe("uppercase");
+    expect(screen.getByText("Must find").style.textTransform).toBe("uppercase");
     expect(messages.evalsTab.kind.must_findName).toBe("Positive case · must find");
     expect(messages.evalsTab.kind.must_not_flagName).toBe("Negative case · must not flag");
     expect(messages.evalsTab.kind.must_find).toMatch(/[a-z]/);
@@ -114,6 +114,115 @@ describe("EvalCasesList", () => {
     await waitFor(() =>
       expect(calls.some((c) => c.method === "DELETE" && c.path === "/eval-cases/c1")).toBe(true),
     );
+  });
+
+  it("runs one case and shows its outcome, kept count and cost", async () => {
+    const calls = mockFetch({
+      "GET /agents/ag1/eval-cases": CASES,
+      "POST /eval-cases/c1/run": {
+        outcome: "passed",
+        pass: true,
+        expectation_kind: "must_find",
+        matched: true,
+        matched_count: 1,
+        findings_kept: 2,
+        findings_dropped: 0,
+        kept: [],
+        dropped: [],
+        duration_ms: 1200,
+        cost_usd: 0.0012,
+        agent_version: 3,
+        error: null,
+      },
+    });
+    renderWithProviders(<EvalCasesList agentId="ag1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run eval case “src\/a.ts:12/ }));
+    expect((await screen.findByText("Passed")).parentElement).toHaveTextContent(/Passed.*2 findings kept/);
+    expect(calls.some((c) => c.method === "POST" && c.path === "/eval-cases/c1/run")).toBe(true);
+  });
+
+  it("edits a case in the two-column dialog: sends name and JSON without source, then refetches", async () => {
+    const calls = mockFetch({
+      "GET /agents/ag1/eval-cases": CASES,
+      "PATCH /eval-cases/c1": CASES[0],
+    });
+    renderWithProviders(<EvalCasesList agentId="ag1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit eval case “src\/a.ts:12/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Renamed" } });
+    const json = within(dialog).getByLabelText("Expected output") as HTMLTextAreaElement;
+    expect(json.value).not.toContain("source");
+    fireEvent.change(json, {
+      target: { value: JSON.stringify({ ...JSON.parse(json.value), kind: "must_not_flag", end_line: 14 }) },
+    });
+    expect(within(dialog).getByText("valid JSON")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("switch", { name: "Run on save" })); // off: close after save
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    const body = calls.find((c) => c.method === "PATCH")!.body as {
+      name: string;
+      expected_output: Record<string, unknown>;
+    };
+    expect(body.name).toBe("Renamed");
+    expect(body.expected_output).toMatchObject({ kind: "must_not_flag", start_line: 12, end_line: 14 });
+    expect(body.expected_output).not.toHaveProperty("source");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("blocks Save while the JSON is invalid or the file leaves the frozen diff", async () => {
+    mockFetch({ "GET /agents/ag1/eval-cases": CASES });
+    renderWithProviders(<EvalCasesList agentId="ag1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit eval case “src\/a.ts:12/ }));
+    const dialog = screen.getByRole("dialog");
+    const json = within(dialog).getByLabelText("Expected output") as HTMLTextAreaElement;
+    fireEvent.change(json, { target: { value: "{ nope" } });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(within(dialog).getByText("invalid JSON")).toBeInTheDocument();
+    fireEvent.change(json, { target: { value: JSON.stringify({ ...CASES[0]!.expected_output, source: undefined, file: "other.ts" }) } });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(within(dialog).getByText(/file must be src\/a.ts/)).toBeInTheDocument();
+  });
+
+  it("Run case in the edit dialog scores the stored case against the JSON on screen", async () => {
+    const calls = mockFetch({
+      "GET /agents/ag1/eval-cases": CASES,
+      "POST /eval-cases/c1/run": {
+        outcome: "passed", pass: true, expectation_kind: "must_find", matched: true, matched_count: 1,
+        findings_kept: 1, findings_dropped: 0, kept: [], dropped: [], duration_ms: 900, cost_usd: 0.001,
+        agent_version: 2, error: null,
+      },
+    });
+    renderWithProviders(<EvalCasesList agentId="ag1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Edit eval case “src\/a.ts:12/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Run case" }));
+    expect(await within(dialog).findByRole("status")).toHaveTextContent(/passed/i);
+    const call = calls.find((c) => c.path === "/eval-cases/c1/run")!;
+    expect((call.body as { expected_output: { file: string } }).expected_output.file).toBe("src/a.ts");
+  });
+
+  it("creates a case by hand: pasted diff + JSON, Save blocked until the diff is there", async () => {
+    const calls = mockFetch({
+      "GET /agents/ag1/eval-cases": CASES,
+      "POST /agents/ag1/eval-cases": CASES[0],
+    });
+    renderWithProviders(<EvalCasesList agentId="ag1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "New eval case" }));
+    const dialog = screen.getByRole("dialog");
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "stripe-key-leak" } });
+    expect(save).toBeDisabled(); // no diff yet
+    fireEvent.change(within(dialog).getByLabelText(/Diff \(hunks/), { target: { value: "@@ -1 +1 @@\n+x" } });
+    expect(save).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("switch", { name: "Run on save" }));
+    fireEvent.click(save);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const body = calls.find((c) => c.method === "POST")!.body as {
+      name: string; patch: string; expected_output: Record<string, unknown>;
+    };
+    expect(body).toMatchObject({ name: "stripe-key-leak", patch: "@@ -1 +1 @@\n+x" });
+    expect(body.expected_output).toMatchObject({ kind: "must_find", file: "src/example.ts" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("shows an inline error for 409 eval_run_in_progress and keeps the row", async () => {
