@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   EvalCase,
+  EvalCaseManualCreate,
   EvalCaseDraft,
   EvalCaseOverrides,
   EvalDashboardRow,
@@ -19,6 +20,7 @@ import {
   EVAL_BODY_LIMIT_BYTES,
   EVAL_CASE_CREATE_RATE_LIMIT,
   EVAL_DRY_RUN_RATE_LIMIT,
+  EVAL_MANUAL_BODY_LIMIT_BYTES,
   EVAL_RUN_RATE_LIMIT,
 } from './constants.js';
 import { EvalService } from './service.js';
@@ -34,6 +36,12 @@ const OkResponse = z.object({ ok: z.literal(true) });
  *                                      (R-1 then R-3: 409 per spec A table R-1, 422
  *                                      validation_error / file_not_in_diff / kind_mismatch; 413)
  *   GET    /agents/:id/eval-cases   -> EvalCase[] sorted by name
+ *   POST   /agents/:id/eval-cases   -> 201 EvalCase written by hand (body EvalCaseManualCreate; 422 invalid_diff /
+ *                                      too_many_cases; 409 eval_run_in_progress; source is null)
+ *   PATCH  /eval-cases/:id          -> EvalCase; body EvalCaseOverrides (name, expected_output); the file
+ *                                      must stay the frozen diff's file (422 file_not_in_diff; 409 eval_run_in_progress)
+ *   POST   /eval-cases/:id/run      -> EvalDryRunResult (stateless single-case run, nothing stored; optional
+ *                                      body EvalDryRunRequest overrides the expectation for scoring)
  *   DELETE /eval-cases/:id          -> { ok: true } (409 eval_run_in_progress)
  *   POST   /agents/:id/eval-runs    -> 202 EvalSuiteRun (409 / 422 per spec A table R-2)
  *   GET    /eval-runs/:id           -> EvalSuiteRunDetail
@@ -104,6 +112,20 @@ export default async function evalRoutes(appBase: FastifyInstance) {
     },
   );
 
+  app.post(
+    '/agents/:id/eval-cases',
+    {
+      schema: { params: IdParams, body: EvalCaseManualCreate, response: { 201: EvalCase } },
+      bodyLimit: EVAL_MANUAL_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: EVAL_CASE_CREATE_RATE_LIMIT, timeWindow: '1 minute' } },
+    },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(container, req);
+      const created = await service.createManualCase(workspaceId, req.params.id, req.body);
+      return reply.code(201).send(created);
+    },
+  );
+
   app.delete(
     '/eval-cases/:id',
     { schema: { params: IdParams, response: { 200: OkResponse } } },
@@ -111,6 +133,36 @@ export default async function evalRoutes(appBase: FastifyInstance) {
       const { workspaceId } = await getContext(container, req);
       await service.deleteCase(workspaceId, req.params.id);
       return { ok: true as const };
+    },
+  );
+
+  app.patch(
+    '/eval-cases/:id',
+    {
+      schema: { params: IdParams, body: EvalCaseOverrides, response: { 200: EvalCase } },
+      bodyLimit: EVAL_BODY_LIMIT_BYTES,
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.updateCase(workspaceId, req.params.id, req.body);
+    },
+  );
+
+  app.post(
+    '/eval-cases/:id/run',
+    {
+      schema: {
+        params: IdParams,
+        // nullish: Fastify hands an absent body to the validator as null
+        body: EvalDryRunRequest.nullish(),
+        response: { 200: EvalDryRunResult },
+      },
+      bodyLimit: EVAL_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: EVAL_DRY_RUN_RATE_LIMIT, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.runSingleCase(workspaceId, req.params.id, req.body ?? undefined, req.log);
     },
   );
 

@@ -23,6 +23,9 @@ export const EVAL_DRY_RUN_RATE_LIMIT = 10;
 /** Spec C NFR-4: request bodies of the draft/dry-run/create endpoints are capped at 16 KB (413). */
 export const EVAL_BODY_LIMIT_BYTES = 16_384;
 
+/** Body cap of the hand-written case (`POST /agents/:id/eval-cases`): carries a pasted patch. */
+export const EVAL_MANUAL_BODY_LIMIT_BYTES = 262_144;
+
 /**
  * Cap of `EvalExpectationInput.title` (shared contract). `Finding.title` is
  * uncapped, so `buildExpectation` truncates to this at the single derivation

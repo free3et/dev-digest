@@ -340,4 +340,108 @@ d('eval cases (Testcontainers pg)', () => {
     expect(statuses[30]).toBe(429);
     await app.close();
   });
+  describe('edit and single-case run', () => {
+    const editable = (c: EvalCase) => {
+      const { source: _source, ...rest } = c.expected_output;
+      return rest;
+    };
+
+    async function makeCase(decided: 'accepted' | 'dismissed' = 'accepted') {
+      const agentId = await makeAgent();
+      const f = await makeFinding({ agentId, decided });
+      const app = await appWith();
+      const res = await app.inject({ method: 'POST', url: `/findings/${f.findingId}/eval-case` });
+      return { app, agentId, created: EvalCase.parse(res.json()) };
+    }
+
+    it('PATCH renames and re-ranges a case, keeps the frozen input and source', async () => {
+      const { app, created } = await makeCase();
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/eval-cases/${created.id}`,
+        payload: {
+          name: 'Renamed case',
+          expected_output: { ...editable(created), kind: 'must_not_flag', start_line: 11, end_line: 11 },
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = EvalCase.parse(res.json());
+      expect(body.name).toBe('Renamed case');
+      expect(body.expected_output).toMatchObject({ kind: 'must_not_flag', start_line: 11, end_line: 11 });
+      expect(body.expected_output.source).toEqual(created.expected_output.source);
+      expect(body.input_diff).toBe(created.input_diff);
+      await app.close();
+    });
+
+    it('PATCH refuses a file outside the frozen diff (422) and an unknown case (404)', async () => {
+      const { app, created } = await makeCase();
+      const bad = await app.inject({
+        method: 'PATCH',
+        url: `/eval-cases/${created.id}`,
+        payload: { expected_output: { ...editable(created), file: 'other.ts' } },
+      });
+      expect(bad.statusCode).toBe(422);
+      expect((bad.json() as { error: { code: string } }).error.code).toBe('file_not_in_diff');
+      const missing = await app.inject({ method: 'PATCH', url: `/eval-cases/${randomUUID()}`, payload: { name: 'x' } });
+      expect(missing.statusCode).toBe(404);
+      await app.close();
+    });
+
+    it('POST /agents/:id/eval-cases creates a hand-written case with a null source', async () => {
+      const agentId = await makeAgent();
+      const app = await appWith();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/agents/${agentId}/eval-cases`,
+        payload: {
+          name: 'stripe-key-leak',
+          patch: PATCH,
+          expected_output: { kind: 'must_find', file: 'src/config.ts', start_line: 11, end_line: 11, title: 't', severity: 'WARNING', category: 'security' },
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = EvalCase.parse(res.json());
+      expect(body.owner_id).toBe(agentId);
+      expect(body.expected_output).toMatchObject({ kind: 'must_find', file: 'src/config.ts', source: null });
+      expect(body.input_files).toEqual(['src/config.ts']);
+      expect(body.input_diff).toContain('+++ b/src/config.ts');
+      const list = await app.inject({ method: 'GET', url: `/agents/${agentId}/eval-cases` });
+      expect((list.json() as EvalCase[]).map((c) => c.id)).toContain(body.id);
+      await app.close();
+    });
+
+    it('POST /agents/:id/eval-cases refuses a patch without a hunk (422) and an unknown agent (404)', async () => {
+      const agentId = await makeAgent();
+      const app = await appWith();
+      const payload = {
+        name: 'x',
+        patch: 'no hunk here',
+        expected_output: { kind: 'must_find', file: 'a.ts', start_line: 1, end_line: 1, title: 't', severity: 'WARNING', category: 'x' },
+      };
+      const bad = await app.inject({ method: 'POST', url: `/agents/${agentId}/eval-cases`, payload });
+      expect(bad.statusCode).toBe(422);
+      expect((bad.json() as { error: { code: string } }).error.code).toBe('invalid_diff');
+      const missing = await app.inject({ method: 'POST', url: `/agents/${randomUUID()}/eval-cases`, payload });
+      expect(missing.statusCode).toBe(404);
+      await app.close();
+    });
+
+    it('POST /eval-cases/:id/run answers a result and stores nothing', async () => {
+      const { app, created } = await makeCase();
+      const before = (await pg.handle.db.select().from(t.evalSuiteRuns)).length;
+      const res = await app.inject({ method: 'POST', url: `/eval-cases/${created.id}/run`, payload: {} });
+      expect(res.statusCode).toBe(200);
+      expect(['passed', 'failed', 'error']).toContain((res.json() as { outcome: string }).outcome);
+      expect((await pg.handle.db.select().from(t.evalSuiteRuns)).length).toBe(before);
+      const bad = await app.inject({
+        method: 'POST',
+        url: `/eval-cases/${created.id}/run`,
+        payload: { expected_output: { ...editable(created), file: 'other.ts' } },
+      });
+      expect(bad.statusCode).toBe(422);
+      const missing = await app.inject({ method: 'POST', url: `/eval-cases/${randomUUID()}/run`, payload: {} });
+      expect(missing.statusCode).toBe(404);
+      await app.close();
+    });
+  });
 });

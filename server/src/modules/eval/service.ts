@@ -1,6 +1,7 @@
 import type {
   EvalCase,
   EvalCaseDraft,
+  EvalCaseManualCreate,
   EvalCaseOverrides,
   EvalDashboardRow,
   EvalRecentRun,
@@ -16,12 +17,19 @@ import type {
 import type { Container } from '../../platform/container.js';
 import type { PinoLike } from '../../platform/run-logger.js';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import { EVAL_CASE_TIMEOUT_MS, EVAL_HISTORY_LIMIT, EVAL_MAX_CASES } from './constants.js';
+import {
+  EVAL_CASE_TIMEOUT_MS,
+  EVAL_EXPECTATION_TITLE_MAX,
+  EVAL_HISTORY_LIMIT,
+  EVAL_MAX_CASES,
+} from './constants.js';
+import { parseUnifiedDiff } from '../../adapters/git/diff-parser.js';
 import { describeCaseError, runCase } from './case-runner.js';
 import { EvalRepository, type Tx } from './repository.js';
 import {
   buildCaseDraft,
   buildExpectation,
+  buildSingleFileDiff,
   dashboardRows,
   decidedKind,
   dryRunLogLine,
@@ -269,6 +277,143 @@ export class EvalService {
       const ok = await repo.deleteCase(workspaceId, caseId, tx);
       if (!ok) throw new NotFoundError('Eval case not found');
     });
+  }
+
+  /**
+   * A case written by hand (not from a finding): the user supplies the file,
+   * the hunks and the expectation. `source` is null, the PR meta is a stub.
+   * 404 unknown/foreign agent; 422 `invalid_diff` when the patch has no hunk
+   * for the file; 422 `too_many_cases`; 409 `eval_run_in_progress`.
+   */
+  async createManualCase(workspaceId: string, agentId: string, body: EvalCaseManualCreate): Promise<EvalCase> {
+    const { repo, agents } = this.deps;
+    const agent = await agents.getById(workspaceId, agentId);
+    if (!agent) throw new NotFoundError('Agent not found');
+
+    const ex = body.expected_output;
+    const inputDiff = buildSingleFileDiff(ex.file, body.patch);
+    const parsed = parseUnifiedDiff(inputDiff).files.find((f) => f.path === ex.file);
+    if (!parsed || parsed.hunks.length === 0) {
+      throw new AppError('invalid_diff', 'The patch must contain at least one @@ hunk', 422);
+    }
+
+    return repo.transaction(async (tx) => {
+      await repo.lockAgent(tx, agentId);
+      if (await repo.getRunningSuite(workspaceId, agentId, tx)) {
+        throw new AppError('eval_run_in_progress', 'An eval run of this agent is in progress', 409);
+      }
+      const existing = await repo.listCasesByAgent(workspaceId, agentId, tx);
+      if (existing.length >= EVAL_MAX_CASES) {
+        throw new AppError('too_many_cases', `An agent has at most ${EVAL_MAX_CASES} eval cases`, 422);
+      }
+      const row = await repo.insertCase(
+        {
+          workspaceId,
+          agentId,
+          name: body.name,
+          inputDiff,
+          inputFiles: [ex.file],
+          inputMeta: { pr_number: 0, pr_title: body.name, pr_body: null, repo: 'manual' },
+          expectedOutput: { ...ex, source: null },
+        },
+        tx,
+      );
+      return toEvalCase(row);
+    });
+  }
+
+  /**
+   * Edit a case's name and/or expectation. The frozen input and `source` stay;
+   * the file must remain the file of the frozen diff (422 `file_not_in_diff`).
+   * The kind may change (the user is redefining the case, not re-deciding the
+   * finding). 404 unknown/foreign case; 409 `eval_run_in_progress`.
+   */
+  async updateCase(workspaceId: string, caseId: string, body: EvalCaseOverrides): Promise<EvalCase> {
+    const { repo } = this.deps;
+    const found = await repo.getCase(workspaceId, caseId);
+    if (!found) throw new NotFoundError('Eval case not found');
+    const current = toEvalCase(found);
+    const next = body.expected_output;
+    if (next && next.file !== current.input_files[0]) {
+      throw new AppError('file_not_in_diff', 'expected_output.file must be the file of the frozen diff', 422);
+    }
+    return repo.transaction(async (tx) => {
+      await repo.lockAgent(tx, found.ownerId);
+      if (await repo.getRunningSuite(workspaceId, found.ownerId, tx)) {
+        throw new AppError('eval_run_in_progress', 'An eval run of this agent is in progress', 409);
+      }
+      const row = await repo.updateCase(
+        workspaceId,
+        caseId,
+        {
+          name: body.name ?? current.name,
+          expectedOutput: next ? withServerSource(next, current.expected_output) : current.expected_output,
+        },
+        tx,
+      );
+      if (!row) throw new NotFoundError('Eval case not found');
+      return toEvalCase(row);
+    });
+  }
+
+  /**
+   * Run ONE stored case against its agent's current config: a stateless,
+   * guarded model call like the dry-run (nothing is stored, no suite row, no
+   * metrics move). An optional `expected_output` overrides the expectation for
+   * SCORING only (never sent to the model). A missing key or call failure is a
+   * 200 `outcome: error`; a file outside the frozen diff is 422.
+   */
+  async runSingleCase(
+    workspaceId: string,
+    caseId: string,
+    body?: EvalDryRunRequest,
+    log?: PinoLike,
+  ): Promise<EvalDryRunResult> {
+    const { agents } = this.deps;
+    const found = await this.deps.repo.getCase(workspaceId, caseId);
+    if (!found) throw new NotFoundError('Eval case not found');
+    const evalCase = toEvalCase(found);
+    const agent = await agents.getById(workspaceId, found.ownerId);
+    if (!agent) throw new NotFoundError('Agent not found');
+
+    const skillRows = await agents.enabledSkillsForPrompt(agent.id);
+    const timeoutMs = this.deps.caseTimeoutMs ?? EVAL_CASE_TIMEOUT_MS;
+    let scoring = evalCase.expected_output;
+    const override = body?.expected_output;
+    if (override) {
+      if (override.file !== evalCase.input_files[0]) {
+        throw new AppError('file_not_in_diff', 'expected_output.file must be the file of the frozen diff', 422);
+      }
+      scoring = withServerSource(override, evalCase.expected_output);
+    }
+
+    const started = Date.now();
+    let result: EvalDryRunResult;
+    try {
+      const llm = await this.deps.llmSingleShot(agent.provider, { timeoutMs });
+      const run = await runCase({
+        systemPrompt: agent.systemPrompt,
+        model: agent.model,
+        skills: skillRows.map((r) => evalSkillBlock(r.skill)),
+        llm,
+        evalCase: { ...evalCase, expected_output: scoring },
+        timeoutMs,
+      });
+      result = toDryRunResult(run.result, scoring, run.costUsd, run.durationMs, agent.version);
+    } catch (err) {
+      result = toDryRunResult(
+        errorCase(scoring.kind, describeCaseError(err)),
+        scoring,
+        null,
+        Date.now() - started,
+        agent.version,
+      );
+    }
+    log?.info(
+      { case_id: caseId, agent_id: agent.id, outcome: result.outcome, cost_usd: result.cost_usd },
+      `eval case ${caseId}: single run ${result.outcome}`,
+    );
+    return result;
   }
 
   // ------------------------------------------------------------ suites

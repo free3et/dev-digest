@@ -89,17 +89,20 @@ export const EvalExpectation = z
     title: z.string(),
     severity: z.string(),
     category: z.string(),
-    source: z.object({
-      finding_id: z.string(),
-      review_id: z.string(),
-      pr_id: z.string(),
-      /** "owner/name" */
-      repo: z.string(),
-      head_sha: z.string(),
-      agent_id: z.string(),
-      /** null when the review has no run. */
-      run_id: z.string().nullable(),
-    }),
+    /** null for a case written by hand (`POST /agents/:id/eval-cases`), not derived from a finding. */
+    source: z
+      .object({
+        finding_id: z.string(),
+        review_id: z.string(),
+        pr_id: z.string(),
+        /** "owner/name" */
+        repo: z.string(),
+        head_sha: z.string(),
+        agent_id: z.string(),
+        /** null when the review has no run. */
+        run_id: z.string().nullable(),
+      })
+      .nullable(),
   })
   .refine((e) => e.end_line >= e.start_line, {
     message: 'end_line must be >= start_line',
@@ -168,6 +171,21 @@ export const EvalCaseOverrides = z
   })
   .strict();
 export type EvalCaseOverrides = z.infer<typeof EvalCaseOverrides>;
+
+/**
+ * Body of `POST /agents/:id/eval-cases`: a case written by hand, not derived
+ * from a finding. `patch` is the hunks of ONE file (the part of a unified diff
+ * from the first `@@`); the server wraps it in the headers of
+ * `expected_output.file`. The stored `source` is null.
+ */
+export const EvalCaseManualCreate = z
+  .object({
+    name: z.string().trim().min(1).max(500),
+    patch: z.string().min(1).max(200_000),
+    expected_output: EvalExpectationInput,
+  })
+  .strict();
+export type EvalCaseManualCreate = z.infer<typeof EvalCaseManualCreate>;
 
 /**
  * Response of `GET /findings/:id/eval-case/draft` (Spec C): the case a bodiless

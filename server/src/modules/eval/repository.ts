@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, getTableColumns, inArray, lte, sql } from 'drizzle-orm';
-import type { EvalCaseOutcome, EvalSuiteStatus } from '@devdigest/shared';
+import type { EvalCaseOutcome, EvalExpectation, EvalSuiteStatus } from '@devdigest/shared';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { EvalCaseRow, EvalRunRow, EvalSuiteRunRow } from '../../db/rows.js';
@@ -199,6 +199,21 @@ export class EvalRepository {
       .select()
       .from(t.evalCases)
       .where(and(eq(t.evalCases.workspaceId, workspaceId), eq(t.evalCases.id, id)));
+    return row;
+  }
+
+  /** Rewrites the editable fields of a case; the frozen input is never touched. */
+  async updateCase(
+    workspaceId: string,
+    id: string,
+    values: { name: string; expectedOutput: EvalExpectation },
+    tx?: Tx,
+  ): Promise<EvalCaseRow | undefined> {
+    const [row] = await this.c(tx)
+      .update(t.evalCases)
+      .set({ name: values.name, expectedOutput: values.expectedOutput })
+      .where(and(eq(t.evalCases.workspaceId, workspaceId), eq(t.evalCases.id, id)))
+      .returning();
     return row;
   }
 
