@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   EvalCase,
+  EvalCaseCopyRequest,
   EvalCaseManualCreate,
   EvalCaseDraft,
   EvalCaseOverrides,
@@ -13,6 +14,7 @@ import {
   EvalRecentRunsQuery,
   EvalSuiteRun,
   EvalSuiteRunDetail,
+  EvalSuiteStartRequest,
 } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -40,8 +42,15 @@ const OkResponse = z.object({ ok: z.literal(true) });
  *                                      too_many_cases; 409 eval_run_in_progress; source is null)
  *   PATCH  /eval-cases/:id          -> EvalCase; body EvalCaseOverrides (name, expected_output); the file
  *                                      must stay the frozen diff's file (422 file_not_in_diff; 409 eval_run_in_progress)
+ *   GET    /skills/:id/eval-cases   -> EvalCase[] of the skill, sorted by name (404)
+ *   POST   /skills/:id/eval-cases   -> 201 EvalCase written by hand for a skill (body EvalCaseManualCreate; R-G1)
+ *   POST   /skills/:id/eval-cases/copy -> 201 EvalCase copied from an agent case (body EvalCaseCopyRequest; R-G1)
+ *   POST   /skills/:id/eval-runs    -> 202 EvalSuiteRun, a skill suite through a host agent (body
+ *                                      EvalSuiteStartRequest; R-G3)
+ *   GET    /skills/:id/eval-runs    -> EvalSuiteRun[] of the skill (<= 50, newest first; 404)
  *   POST   /eval-cases/:id/run      -> EvalDryRunResult (stateless single-case run, nothing stored; optional
- *                                      body EvalDryRunRequest overrides the expectation for scoring)
+ *                                      body EvalDryRunRequest: expected_output overrides the expectation for
+ *                                      scoring; agent_id is the host of a skill case; R-G2)
  *   DELETE /eval-cases/:id          -> { ok: true } (409 eval_run_in_progress)
  *   POST   /agents/:id/eval-runs    -> 202 EvalSuiteRun (409 / 422 per spec A table R-2)
  *   GET    /eval-runs/:id           -> EvalSuiteRunDetail
@@ -69,7 +78,8 @@ export default async function evalRoutes(appBase: FastifyInstance) {
       schema: {
         params: IdParams,
         // nullish: Fastify hands an absent body to the validator as null
-        body: EvalDryRunRequest.nullish(),
+        // a finding dry-run has no host: `agent_id` here is a 422
+        body: EvalDryRunRequest.omit({ agent_id: true }).nullish(),
         response: { 200: EvalDryRunResult },
       },
       bodyLimit: EVAL_BODY_LIMIT_BYTES,
@@ -123,6 +133,66 @@ export default async function evalRoutes(appBase: FastifyInstance) {
       const { workspaceId } = await getContext(container, req);
       const created = await service.createManualCase(workspaceId, req.params.id, req.body);
       return reply.code(201).send(created);
+    },
+  );
+
+  app.get(
+    '/skills/:id/eval-cases',
+    { schema: { params: IdParams, response: { 200: z.array(EvalCase) } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.listSkillCases(workspaceId, req.params.id);
+    },
+  );
+
+  app.post(
+    '/skills/:id/eval-cases',
+    {
+      schema: { params: IdParams, body: EvalCaseManualCreate, response: { 201: EvalCase } },
+      bodyLimit: EVAL_MANUAL_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: EVAL_CASE_CREATE_RATE_LIMIT, timeWindow: '1 minute' } },
+    },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(container, req);
+      const created = await service.createSkillManualCase(workspaceId, req.params.id, req.body);
+      return reply.code(201).send(created);
+    },
+  );
+
+  app.post(
+    '/skills/:id/eval-cases/copy',
+    {
+      schema: { params: IdParams, body: EvalCaseCopyRequest, response: { 201: EvalCase } },
+      bodyLimit: EVAL_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: EVAL_CASE_CREATE_RATE_LIMIT, timeWindow: '1 minute' } },
+    },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(container, req);
+      const created = await service.copyCaseToSkill(workspaceId, req.params.id, req.body);
+      return reply.code(201).send(created);
+    },
+  );
+
+  app.post(
+    '/skills/:id/eval-runs',
+    {
+      schema: { params: IdParams, body: EvalSuiteStartRequest, response: { 202: EvalSuiteRun } },
+      bodyLimit: EVAL_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: EVAL_RUN_RATE_LIMIT, timeWindow: '1 minute' } },
+    },
+    async (req, reply) => {
+      const { workspaceId } = await getContext(container, req);
+      const suite = await service.startSkillSuite(workspaceId, req.params.id, req.body.agent_id, req.log);
+      return reply.code(202).send(suite);
+    },
+  );
+
+  app.get(
+    '/skills/:id/eval-runs',
+    { schema: { params: IdParams, response: { 200: z.array(EvalSuiteRun) } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.listSkillSuites(workspaceId, req.params.id);
     },
   );
 

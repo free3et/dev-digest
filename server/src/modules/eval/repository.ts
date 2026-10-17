@@ -5,7 +5,7 @@ import * as t from '../../db/schema.js';
 import type { EvalCaseRow, EvalRunRow, EvalSuiteRunRow } from '../../db/rows.js';
 import { EVAL_HISTORY_LIMIT } from './constants.js';
 import { toEvalSuiteRun } from './helpers.js';
-import type { DashboardAgentInput, FindingScope } from './types.js';
+import type { DashboardAgentInput, EvalOwner, FindingScope } from './types.js';
 
 /**
  * eval data-access layer. The ONLY file in this module that touches the DB.
@@ -20,18 +20,25 @@ type Conn = Db | Tx;
 
 export interface NewCase {
   workspaceId: string;
-  agentId: string;
+  owner: EvalOwner;
   name: string;
   inputDiff: string;
   inputFiles: string[];
   inputMeta: unknown;
   expectedOutput: unknown;
+  /** Carried over by a copy; null for every other creation. */
+  notes?: string | null;
 }
 
 export interface NewSuiteRun {
   workspaceId: string;
+  ownerKind: 'agent' | 'skill';
+  /** The agent whose config runs the cases (the owner, or the host of a skill suite). */
   agentId: string;
   agentVersion: number;
+  /** Set exactly when `ownerKind` is `skill`. */
+  skillId: string | null;
+  skillVersion: number | null;
   caseIds: string[];
   skills: string[];
 }
@@ -88,9 +95,11 @@ export class EvalRepository {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`eval-finding:${findingId}`}))`);
   }
 
-  /** Serialises suite start / case delete for one agent until the tx ends. */
-  async lockAgent(tx: Tx, agentId: string): Promise<void> {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`eval-agent:${agentId}`}))`);
+  /** Serialises suite start / case create, edit, delete for one owner until the tx ends. */
+  async lockOwner(tx: Tx, owner: EvalOwner): Promise<void> {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`eval-${owner.kind}:${owner.id}`}))`,
+    );
   }
 
   // ------------------------------------------------------------ cases
@@ -166,29 +175,29 @@ export class EvalRepository {
       .insert(t.evalCases)
       .values({
         workspaceId: values.workspaceId,
-        ownerKind: 'agent',
-        ownerId: values.agentId,
+        ownerKind: values.owner.kind,
+        ownerId: values.owner.id,
         name: values.name,
         inputDiff: values.inputDiff,
         inputFiles: values.inputFiles,
         inputMeta: values.inputMeta,
         expectedOutput: values.expectedOutput,
-        notes: null,
+        notes: values.notes ?? null,
       })
       .returning();
     return row!;
   }
 
-  /** An agent's cases, `ORDER BY name` (id as the tie-break). */
-  async listCasesByAgent(workspaceId: string, agentId: string, tx?: Tx): Promise<EvalCaseRow[]> {
+  /** An owner's cases, `ORDER BY name` (id as the tie-break). */
+  async listCasesByOwner(workspaceId: string, owner: EvalOwner, tx?: Tx): Promise<EvalCaseRow[]> {
     return this.c(tx)
       .select()
       .from(t.evalCases)
       .where(
         and(
           eq(t.evalCases.workspaceId, workspaceId),
-          eq(t.evalCases.ownerKind, 'agent'),
-          eq(t.evalCases.ownerId, agentId),
+          eq(t.evalCases.ownerKind, owner.kind),
+          eq(t.evalCases.ownerId, owner.id),
         ),
       )
       .orderBy(asc(t.evalCases.name), asc(t.evalCases.id));
@@ -229,34 +238,48 @@ export class EvalRepository {
   // ------------------------------------------------------------ suites
 
   /**
-   * Insert a `running` suite. The partial unique index
-   * `eval_suite_runs_agent_running_uq` allows one per agent; a conflict returns
-   * `null` ("already running") instead of throwing, because a unique violation
-   * would abort the caller's transaction.
+   * Insert a `running` suite. Two partial unique indexes allow one per owner:
+   * `eval_suite_runs_agent_owner_running_uq` (agent suites, by `agent_id`) and
+   * `eval_suite_runs_skill_running_uq` (skill suites, by `skill_id`). A conflict
+   * returns `null` ("already running") instead of throwing, because a unique
+   * violation would abort the caller's transaction. The conflict `where` must
+   * repeat the index predicate in full (incl. `owner_kind`) or Postgres cannot
+   * infer the arbiter index.
    */
   async insertSuiteRun(values: NewSuiteRun, tx?: Tx): Promise<EvalSuiteRunRow | null> {
     const rows = await this.c(tx)
       .insert(t.evalSuiteRuns)
       .values({
         workspaceId: values.workspaceId,
+        ownerKind: values.ownerKind,
         agentId: values.agentId,
         agentVersion: values.agentVersion,
+        skillId: values.skillId,
+        skillVersion: values.skillVersion,
         status: 'running',
         caseIds: values.caseIds,
         skills: values.skills,
         casesTotal: values.caseIds.length,
       })
-      .onConflictDoNothing({
-        target: t.evalSuiteRuns.agentId,
-        where: sql`${t.evalSuiteRuns.status} = 'running'`,
-      })
+      .onConflictDoNothing(
+        values.ownerKind === 'skill'
+          ? {
+              target: t.evalSuiteRuns.skillId,
+              where: sql`${t.evalSuiteRuns.status} = 'running' AND ${t.evalSuiteRuns.ownerKind} = 'skill'`,
+            }
+          : {
+              target: t.evalSuiteRuns.agentId,
+              where: sql`${t.evalSuiteRuns.status} = 'running' AND ${t.evalSuiteRuns.ownerKind} = 'agent'`,
+            },
+      )
       .returning();
     return rows[0] ?? null;
   }
 
+  /** The `running` suite of this owner (agent suites by agent id, skill suites by skill id). */
   async getRunningSuite(
     workspaceId: string,
-    agentId: string,
+    owner: EvalOwner,
     tx?: Tx,
   ): Promise<EvalSuiteRunRow | undefined> {
     const [row] = await this.c(tx)
@@ -265,7 +288,10 @@ export class EvalRepository {
       .where(
         and(
           eq(t.evalSuiteRuns.workspaceId, workspaceId),
-          eq(t.evalSuiteRuns.agentId, agentId),
+          eq(t.evalSuiteRuns.ownerKind, owner.kind),
+          owner.kind === 'skill'
+            ? eq(t.evalSuiteRuns.skillId, owner.id)
+            : eq(t.evalSuiteRuns.agentId, owner.id),
           eq(t.evalSuiteRuns.status, 'running'),
         ),
       );
@@ -360,7 +386,28 @@ export class EvalRepository {
     return { suite, runs: rows };
   }
 
-  /** Newest first, at most `limit` (default 50). */
+  /** Skill suites of one skill, newest first, at most `limit`. */
+  async listSuitesBySkill(
+    workspaceId: string,
+    skillId: string,
+    limit: number = EVAL_HISTORY_LIMIT,
+    tx?: Tx,
+  ): Promise<EvalSuiteRunRow[]> {
+    return this.c(tx)
+      .select()
+      .from(t.evalSuiteRuns)
+      .where(
+        and(
+          eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.ownerKind, 'skill'),
+          eq(t.evalSuiteRuns.skillId, skillId),
+        ),
+      )
+      .orderBy(desc(t.evalSuiteRuns.ranAt), desc(t.evalSuiteRuns.id))
+      .limit(limit);
+  }
+
+  /** Agent suites of one agent (skill suites hosted by it excluded), newest first, at most `limit` (default 50). */
   async listSuitesByAgent(
     workspaceId: string,
     agentId: string,
@@ -370,7 +417,13 @@ export class EvalRepository {
     return this.c(tx)
       .select()
       .from(t.evalSuiteRuns)
-      .where(and(eq(t.evalSuiteRuns.workspaceId, workspaceId), eq(t.evalSuiteRuns.agentId, agentId)))
+      .where(
+        and(
+          eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.ownerKind, 'agent'),
+          eq(t.evalSuiteRuns.agentId, agentId),
+        ),
+      )
       .orderBy(desc(t.evalSuiteRuns.ranAt), desc(t.evalSuiteRuns.id))
       .limit(limit);
   }
@@ -396,6 +449,7 @@ export class EvalRepository {
       .where(
         and(
           eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.ownerKind, 'agent'),
           inArray(t.evalSuiteRuns.status, ['done', 'partial']),
         ),
       )
@@ -441,6 +495,7 @@ export class EvalRepository {
       .where(
         and(
           eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.ownerKind, 'agent'),
           inArray(t.evalSuiteRuns.agentId, agentIds),
           inArray(t.evalSuiteRuns.status, ['done', 'partial']),
         ),
@@ -458,6 +513,7 @@ export class EvalRepository {
       .where(
         and(
           eq(t.evalSuiteRuns.workspaceId, workspaceId),
+          eq(t.evalSuiteRuns.ownerKind, 'agent'),
           inArray(t.evalSuiteRuns.agentId, agentIds),
           eq(t.evalSuiteRuns.status, 'running'),
         ),

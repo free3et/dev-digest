@@ -115,11 +115,13 @@ export class EvalSuiteExecutor {
 
   private async finish(job: SuiteJob, override?: { status: 'failed'; error: string }): Promise<void> {
     const final = await finalizeSuiteFromStored(this.deps.repo, job.suite, override);
-    const line = suiteLogLine(job.suite.id, final);
+    const skillId = job.suite.ownerKind === 'skill' ? job.suite.skillId : null;
+    const line = suiteLogLine(job.suite.id, final, skillId);
     job.log?.info(
       {
         suite_run_id: job.suite.id,
         agent_id: job.suite.agentId,
+        ...(skillId ? { skill_id: skillId } : {}),
         status: final.status,
         cases_passed: final.casesPassed,
         cases_total: final.casesTotal,

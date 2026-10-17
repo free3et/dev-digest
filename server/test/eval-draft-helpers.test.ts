@@ -144,7 +144,7 @@ describe('toDryRunResult', () => {
 
   it('passed: counts kept findings that intersect', () => {
     const r = scoreCase(derived, [fnd('src/auth.ts', 13), fnd('src/other.ts', 1)], []);
-    const out = toDryRunResult(r, loc, 0.0123, 1800, 4);
+    const out = toDryRunResult(r, loc, 0.0123, 1800, 4, null);
     expect(out).toMatchObject({
       outcome: 'passed',
       pass: true,
@@ -155,6 +155,7 @@ describe('toDryRunResult', () => {
       cost_usd: 0.0123,
       duration_ms: 1800,
       agent_version: 4,
+      skill_version: null,
       error: null,
     });
     expect(EvalDryRunResult.safeParse(out).success).toBe(true);
@@ -163,7 +164,7 @@ describe('toDryRunResult', () => {
   it('a narrowed range that no longer intersects gives failed for must_find', () => {
     const narrowed = { ...loc, start_line: 40, end_line: 41 };
     const r = scoreCase(narrowed, [fnd('src/auth.ts', 13)], []);
-    const out = toDryRunResult(r, narrowed, 0.01, 10, 1);
+    const out = toDryRunResult(r, narrowed, 0.01, 10, 1, null);
     expect(out.outcome).toBe('failed');
     expect(out.pass).toBe(false);
     expect(out.matched_count).toBe(0);
@@ -180,14 +181,14 @@ describe('toDryRunResult', () => {
     const neg = { ...loc, kind: 'must_not_flag' as const };
     const r = scoreCase(neg, [fnd('src/auth.ts', 13)], []);
     expect(r.matching_kept).toBe(0);
-    const out = toDryRunResult(r, neg, 0.01, 10, 1);
+    const out = toDryRunResult(r, neg, 0.01, 10, 1, null);
     expect(out.matched_count).toBe(1);
     expect(out.outcome).toBe('failed');
     expect(out.expectation_kind).toBe('must_not_flag');
   });
 
   it('error: null counts, empty lists, null cost and pass', () => {
-    const out = toDryRunResult(errorCase('must_find', 'boom'), loc, 0.5, 99, 2);
+    const out = toDryRunResult(errorCase('must_find', 'boom'), loc, 0.5, 99, 2, null);
     expect(out).toMatchObject({
       outcome: 'error',
       pass: null,

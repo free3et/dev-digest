@@ -122,3 +122,9 @@ export interface DerivedCase {
   /** Full expectation with the server-built `source`. */
   expectation: EvalExpectation;
 }
+
+/** Who owns a set of eval cases / a suite run: an agent or a skill (`eval_cases.owner_*`). */
+export interface EvalOwner {
+  kind: 'agent' | 'skill';
+  id: string;
+}

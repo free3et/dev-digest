@@ -32,6 +32,16 @@ export interface EvalFixtures {
   makeAgent(
     o?: { ws?: string; provider?: 'openai' | 'anthropic' | 'openrouter'; systemPrompt?: string },
   ): Promise<string>;
+  makeSkill(o?: {
+    ws?: string;
+    name?: string;
+    body?: string;
+    source?: 'manual' | 'imported_url' | 'imported_file' | 'extracted' | 'community';
+    enabled?: boolean;
+    version?: number;
+  }): Promise<{ id: string; name: string; body: string; version: number }>;
+  /** Links a skill to an agent (`agent_skills`). */
+  linkSkill(agentId: string, skillId: string, o?: { enabled?: boolean; order?: number }): Promise<void>;
   makeFinding(o?: FixtureOpts): Promise<{ findingId: string; reviewId: string; prId: string; repoName: string }>;
   /** Deletes nothing; resolves the seeded default workspace and a foreign one. */
 }
@@ -60,6 +70,30 @@ export async function evalFixtures(pg: PgFixture): Promise<EvalFixtures> {
         })
         .returning();
       return a!.id;
+    },
+
+    async makeSkill(o = {}) {
+      const n = ++seq;
+      const [row] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId: o.ws ?? workspaceId,
+          name: o.name ?? `Fixture skill ${n}`,
+          description: 'd',
+          type: 'custom',
+          source: o.source ?? 'manual',
+          body: o.body ?? `Body of fixture skill ${n}`,
+          enabled: o.enabled ?? true,
+          version: o.version ?? 1,
+        })
+        .returning();
+      return { id: row!.id, name: row!.name, body: row!.body, version: row!.version };
+    },
+
+    async linkSkill(agentId, skillId, o = {}) {
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId, skillId, order: o.order ?? 0, enabled: o.enabled ?? true });
     },
 
     async makeFinding(o = {}) {

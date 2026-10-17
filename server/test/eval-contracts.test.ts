@@ -20,6 +20,8 @@ import {
   EvalCaseDraft,
   EvalDryRunRequest,
   EvalDryRunResult,
+  EvalCaseCopyRequest,
+  EvalSuiteStartRequest,
 } from '@devdigest/shared';
 
 /**
@@ -106,8 +108,11 @@ const runRecord = {
 
 const suiteRun = {
   id: 's1',
+  owner_kind: 'agent',
   agent_id: 'a1',
   agent_version: 3,
+  skill_id: null,
+  skill_version: null,
   status: 'done',
   ran_at: '2026-10-12T10:00:00.000Z',
   finished_at: '2026-10-12T10:01:00.000Z',
@@ -316,6 +321,15 @@ describe('EvalSuiteRun / EvalSuiteRunDetail', () => {
     expect(EvalSuiteRun.safeParse({ ...suiteRun, cases_total: 2.5 }).success).toBe(false);
   });
 
+  it('requires owner_kind and accepts a skill suite', () => {
+    const { owner_kind: _o, ...noKind } = suiteRun;
+    expect(EvalSuiteRun.safeParse(noKind).success).toBe(false);
+    const skillSuite = { ...suiteRun, owner_kind: 'skill', skill_id: 'k1', skill_version: 4 };
+    expect(EvalSuiteRun.parse(skillSuite)).toEqual(skillSuite);
+    expect(EvalSuiteRun.safeParse({ ...suiteRun, owner_kind: 'user' }).success).toBe(false);
+    expect(EvalSuiteRun.safeParse({ ...suiteRun, skill_version: 1.5 }).success).toBe(false);
+  });
+
   it('detail adds cases[] of EvalRunRecord', () => {
     const detail = { ...suiteRun, cases: [runRecord] };
     expect(EvalSuiteRunDetail.parse(detail)).toEqual(detail);
@@ -454,10 +468,24 @@ describe('EvalDryRunRequest / EvalDryRunResult (Spec C)', () => {
     expect(EvalDryRunRequest.safeParse({ input_diff: 'x' }).success).toBe(false);
   });
 
+  it('request: optional uuid agent_id; the omit variant rejects it', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(EvalDryRunRequest.parse({ agent_id: id })).toEqual({ agent_id: id });
+    expect(EvalDryRunRequest.parse({ expected_output: input, agent_id: id })).toEqual({
+      expected_output: input,
+      agent_id: id,
+    });
+    expect(EvalDryRunRequest.safeParse({ agent_id: 'nope' }).success).toBe(false);
+    const findingBody = EvalDryRunRequest.omit({ agent_id: true });
+    expect(findingBody.safeParse({ agent_id: id }).success).toBe(false);
+    expect(findingBody.safeParse({}).success).toBe(true);
+  });
+
   const base = {
     expectation_kind: 'must_find',
     duration_ms: 1800,
     agent_version: 3,
+    skill_version: null,
   };
   const passed = {
     ...base,
@@ -506,6 +534,24 @@ describe('EvalDryRunRequest / EvalDryRunResult (Spec C)', () => {
     expect(EvalDryRunResult.safeParse({ ...passed, outcome: 'maybe' }).success).toBe(false);
     const { agent_version: _v, ...noVersion } = passed;
     expect(EvalDryRunResult.safeParse(noVersion).success).toBe(false);
+  });
+});
+
+describe('EvalCaseCopyRequest / EvalSuiteStartRequest (skill evals)', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+
+  it('copy request: uuid case_id only', () => {
+    expect(EvalCaseCopyRequest.parse({ case_id: id })).toEqual({ case_id: id });
+    expect(EvalCaseCopyRequest.safeParse({}).success).toBe(false);
+    expect(EvalCaseCopyRequest.safeParse({ case_id: 'x' }).success).toBe(false);
+    expect(EvalCaseCopyRequest.safeParse({ case_id: id, extra: 1 }).success).toBe(false);
+  });
+
+  it('start request: uuid agent_id only', () => {
+    expect(EvalSuiteStartRequest.parse({ agent_id: id })).toEqual({ agent_id: id });
+    expect(EvalSuiteStartRequest.safeParse({}).success).toBe(false);
+    expect(EvalSuiteStartRequest.safeParse({ agent_id: 'x' }).success).toBe(false);
+    expect(EvalSuiteStartRequest.safeParse({ agent_id: id, extra: 1 }).success).toBe(false);
   });
 });
 

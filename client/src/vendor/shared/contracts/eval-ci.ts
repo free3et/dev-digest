@@ -93,12 +93,23 @@ export const EvalRunRecord = z.object({
 });
 export type EvalRunRecord = z.infer<typeof EvalRunRecord>;
 
-/** One suite run: every case of an agent, run once, aggregated (`eval_suite_runs`). */
+/**
+ * One suite run: every case of an owner (an agent or a skill), run once,
+ * aggregated (`eval_suite_runs`). For a skill suite `agent_id` /
+ * `agent_version` are the host agent whose config ran the cases.
+ */
 export const EvalSuiteRun = z.object({
   id: z.string(),
+  /** `agent` = the owner's own suite; `skill` = a skill suite run through a host agent. */
+  owner_kind: EvalOwnerKind,
+  /** The agent whose config ran the cases (the owner, or the host of a skill suite). */
   agent_id: z.string(),
-  /** The agent's version when the run started. */
+  /** That agent's version when the run started. */
   agent_version: z.number().int(),
+  /** The skill under test; null for an agent suite. */
+  skill_id: z.string().nullable(),
+  /** The skill's version when the run started; null for an agent suite. */
+  skill_version: z.number().int().nullable(),
   status: EvalSuiteStatus,
   ran_at: z.string(),
   /** null while running. */
@@ -130,15 +141,26 @@ export const EvalSuiteRunDetail = EvalSuiteRun.extend({
 export type EvalSuiteRunDetail = z.infer<typeof EvalSuiteRunDetail>;
 
 /**
- * Body of `POST /findings/:id/eval-case/dry-run` (Spec C). Only the expectation
- * may be overridden, and it is used for scoring only, never sent to the model.
+ * Body of `POST /eval-cases/:id/run` and (without `agent_id`) of
+ * `POST /findings/:id/eval-case/dry-run`. The expectation may be overridden and
+ * is used for scoring only, never sent to the model. `agent_id` is the host of a
+ * skill-owned case; it must be absent for an agent-owned case.
  */
 export const EvalDryRunRequest = z
   .object({
     expected_output: EvalExpectationInput.optional(),
+    agent_id: z.string().uuid().optional(),
   })
   .strict();
 export type EvalDryRunRequest = z.infer<typeof EvalDryRunRequest>;
+
+/** Body of `POST /skills/:id/eval-runs`: the host agent whose prompt and model run the skill's cases. */
+export const EvalSuiteStartRequest = z
+  .object({
+    agent_id: z.string().uuid(),
+  })
+  .strict();
+export type EvalSuiteStartRequest = z.infer<typeof EvalSuiteStartRequest>;
 
 /**
  * Result of one stateless dry-run of a would-be case (Spec C). Nothing is
@@ -163,6 +185,8 @@ export const EvalDryRunResult = z.object({
   cost_usd: z.number().nullable(),
   /** The agent version whose config was used. */
   agent_version: z.number().int(),
+  /** The skill's version for a skill-owned case; null for an agent-owned case or a finding dry-run. */
+  skill_version: z.number().int().nullable(),
   /** Redacted, at most 300 chars. */
   error: z.string().nullable(),
 });

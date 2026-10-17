@@ -89,6 +89,7 @@ describe("resultView", () => {
     duration_ms: 1840,
     cost_usd: 0.02,
     agent_version: 3,
+    skill_version: null,
     error: null,
   };
 

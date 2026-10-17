@@ -308,12 +308,14 @@ export function toDryRunResult(
   costUsd: number | null,
   durationMs: number,
   agentVersion: number,
+  skillVersion: number | null,
 ): EvalDryRunResult {
   const out = result.output;
   const base = {
     expectation_kind: out.expectation_kind,
     duration_ms: durationMs,
     agent_version: agentVersion,
+    skill_version: skillVersion,
   };
   if (result.outcome === 'error') {
     return {
@@ -354,6 +356,30 @@ export function dryRunLogLine(
 ): string {
   const cost = costUsd === null ? 'n/a' : `$${costUsd.toFixed(4)}`;
   return `eval dry-run finding ${findingId}: ${outcome}, cost ${cost}, ${durationMs} ms`;
+}
+
+/**
+ * R-G2 host rule for a per-case run: an agent-owned case takes no host
+ * (`host_not_allowed`), a skill-owned case needs one (`host_required`).
+ */
+export function hostRefusal(
+  ownerKind: 'agent' | 'skill',
+  agentIdGiven: boolean,
+): 'host_required' | 'host_not_allowed' | null {
+  if (ownerKind === 'agent') return agentIdGiven ? 'host_not_allowed' : null;
+  return agentIdGiven ? null : 'host_required';
+}
+
+/** NFR-4: one line per skill per-case run (agent runs keep the same shape without the skill). */
+export function singleRunLogLine(
+  caseId: string,
+  outcome: string,
+  costUsd: number | null,
+  skillId?: string,
+): string {
+  const cost = costUsd === null ? 'n/a' : `$${costUsd.toFixed(4)}`;
+  const owner = skillId ? ` (skill ${skillId})` : '';
+  return `eval case ${caseId}${owner}: single run ${outcome}, cost ${cost}`;
 }
 
 // ============================================================ naming + errors
@@ -478,8 +504,11 @@ export function toEvalRunRecord(row: EvalRunRow, caseName?: string | null): Eval
 export function toEvalSuiteRun(row: EvalSuiteRunRow): EvalSuiteRun {
   return {
     id: row.id,
+    owner_kind: row.ownerKind,
     agent_id: row.agentId,
     agent_version: row.agentVersion,
+    skill_id: row.skillId ?? null,
+    skill_version: row.skillVersion ?? null,
     status: row.status,
     ran_at: row.ranAt.toISOString(),
     finished_at: row.finishedAt ? row.finishedAt.toISOString() : null,
@@ -515,13 +544,18 @@ export function toStoredCaseRun(row: EvalRunRow, expectedOutput: unknown): Store
   };
 }
 
-/** Spec A NFR-5: `eval suite <id>: <status>, <passed>/<total> passed, cost <usd or n/a>`. */
+/**
+ * Spec A NFR-5: `eval suite <id>: <status>, <passed>/<total> passed, cost <usd or n/a>`;
+ * a skill suite adds the skill id: `eval suite <id> (skill <skill_id>): ...` (G1 NFR-4).
+ */
 export function suiteLogLine(
   suiteId: string,
   s: { status: string; casesPassed: number; casesTotal: number; costUsd: number | null },
+  skillId?: string | null,
 ): string {
   const cost = s.costUsd === null ? 'n/a' : `$${s.costUsd.toFixed(4)}`;
-  return `eval suite ${suiteId}: ${s.status}, ${s.casesPassed}/${s.casesTotal} passed, cost ${cost}`;
+  const owner = skillId ? ` (skill ${skillId})` : '';
+  return `eval suite ${suiteId}${owner}: ${s.status}, ${s.casesPassed}/${s.casesTotal} passed, cost ${cost}`;
 }
 
 // ============================================================ dashboard

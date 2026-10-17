@@ -74,6 +74,7 @@ function build(opts: {
   const service = new EvalService({
     repo: repo as never,
     agents,
+    skills: { getById: vi.fn(async () => undefined) },
     llmSingleShot,
     ...(opts.caseTimeoutMs ? { caseTimeoutMs: opts.caseTimeoutMs } : {}),
   });

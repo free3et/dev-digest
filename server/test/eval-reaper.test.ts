@@ -21,6 +21,7 @@ function makeService(repo: Record<string, unknown>): EvalService {
   return new EvalService({
     repo: repo as never,
     agents: {} as never,
+    skills: {} as never,
     llmSingleShot: async () => {
       throw new Error('reaper must not call a model');
     },

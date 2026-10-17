@@ -11,9 +11,12 @@ import {
   errorCase,
   evalSkillBlock,
   evalTaskLine,
+  hostRefusal,
   matches,
   rescoreCase,
   scoreCase,
+  singleRunLogLine,
+  suiteLogLine,
   toEvalCase,
   toEvalRecentRun,
   toEvalRunRecord,
@@ -413,8 +416,11 @@ describe('row mappers', () => {
     const dto = toEvalSuiteRun({
       id: 's1',
       workspaceId: 'w1',
+      ownerKind: 'agent' as const,
       agentId: 'a1',
       agentVersion: 3,
+      skillId: null,
+      skillVersion: null,
       status: 'partial',
       ranAt,
       finishedAt: new Date('2026-10-12T10:01:00.000Z'),
@@ -433,6 +439,9 @@ describe('row mappers', () => {
     });
     expect(dto).toMatchObject({
       id: 's1',
+      owner_kind: 'agent',
+      skill_id: null,
+      skill_version: null,
       agent_id: 'a1',
       agent_version: 3,
       status: 'partial',
@@ -445,12 +454,47 @@ describe('row mappers', () => {
     });
   });
 
+  it('toEvalSuiteRun maps a skill suite and old rows read as agent suites', () => {
+    const base = {
+      id: 's2',
+      workspaceId: 'w1',
+      agentId: 'host',
+      agentVersion: 2,
+      status: 'running' as const,
+      ranAt,
+      finishedAt: null,
+      caseIds: [],
+      skills: ['Rubric'],
+      casesTotal: 0,
+      casesCompleted: 0,
+      casesPassed: 0,
+      casesErrored: 0,
+      recall: null,
+      precision: null,
+      citationAccuracy: null,
+      costUsd: null,
+      durationMs: null,
+      error: null,
+    };
+    expect(
+      toEvalSuiteRun({ ...base, ownerKind: 'skill', skillId: 'k1', skillVersion: 5 }),
+    ).toMatchObject({ owner_kind: 'skill', skill_id: 'k1', skill_version: 5, agent_id: 'host' });
+    // a row without the new columns (undefined) still maps to nulls
+    expect(toEvalSuiteRun({ ...base, ownerKind: 'agent' } as never)).toMatchObject({
+      skill_id: null,
+      skill_version: null,
+    });
+  });
+
   it('toEvalRecentRun carries every suite field plus the agent name, nulls kept', () => {
     const row = {
       id: 's1',
       workspaceId: 'w1',
+      ownerKind: 'agent' as const,
       agentId: 'a1',
       agentVersion: 3,
+      skillId: null,
+      skillVersion: null,
       status: 'partial' as const,
       ranAt,
       finishedAt: new Date('2026-10-12T10:01:00.000Z'),
@@ -694,3 +738,28 @@ describe('constants', () => {
 // Type-level guard: a stored output is an EvalActualOutput.
 const _typed: EvalActualOutput = errorCase('must_find', 'x').output;
 void _typed;
+
+describe('skill eval helpers (G1)', () => {
+  it('hostRefusal: agent case takes no host, skill case needs one', () => {
+    expect(hostRefusal('agent', false)).toBeNull();
+    expect(hostRefusal('agent', true)).toBe('host_not_allowed');
+    expect(hostRefusal('skill', false)).toBe('host_required');
+    expect(hostRefusal('skill', true)).toBeNull();
+  });
+
+  it('suiteLogLine keeps the agent format and adds the skill id for a skill suite', () => {
+    const s = { status: 'done', casesPassed: 2, casesTotal: 3, costUsd: 0.0123 };
+    expect(suiteLogLine('s1', s)).toBe('eval suite s1: done, 2/3 passed, cost $0.0123');
+    expect(suiteLogLine('s1', s, null)).toBe('eval suite s1: done, 2/3 passed, cost $0.0123');
+    expect(suiteLogLine('s1', { ...s, costUsd: null }, 'k1')).toBe(
+      'eval suite s1 (skill k1): done, 2/3 passed, cost n/a',
+    );
+  });
+
+  it('singleRunLogLine names the skill when given', () => {
+    expect(singleRunLogLine('c1', 'passed', 0.5)).toBe('eval case c1: single run passed, cost $0.5000');
+    expect(singleRunLogLine('c1', 'error', null, 'k1')).toBe(
+      'eval case c1 (skill k1): single run error, cost n/a',
+    );
+  });
+});

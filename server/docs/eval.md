@@ -30,9 +30,14 @@ validation_error` before the handler runs (`src/app.ts:135-143`).
 | `GET /agents/:id/eval-cases` | `200` `EvalCase[]`, ordered by `name` | `404` unknown or foreign agent |
 | `POST /agents/:id/eval-cases` | `201` `EvalCase` written by hand: body `{ name, patch, expected_output }` (`patch` = the hunks from the first `@@`, wrapped in the headers of `expected_output.file`); `expected_output.source` is `null`, `input_meta` a stub (`repo: "manual"`) | `404` agent; `422 invalid_diff` (no `@@` hunk), `too_many_cases`; `409 eval_run_in_progress`. Added after Spec F without its own spec (user decision, 2026-10-17); `EvalExpectation.source` became nullable in `@devdigest/shared` |
 | `PATCH /eval-cases/:id` | `200` `EvalCase`; body `{ name?, expected_output? }` (no `source`); frozen input and `source` stay | `404`; `422 file_not_in_diff` (the file must stay the frozen diff's file); `409 eval_run_in_progress`. Added after Spec F without its own spec (user decision, 2026-10-17) |
-| `POST /eval-cases/:id/run` | `200` `EvalDryRunResult`; one stateless model call, nothing stored, no suite row; optional body `{ expected_output }` overrides the expectation for scoring only | `404`; `422 file_not_in_diff` for an override outside the frozen file; a call failure is `200` `outcome: error`; rate-limited like the dry-run. Same note: no spec |
-| `DELETE /eval-cases/:id` | `200` `{ ok: true }` | `404`; `409 eval_run_in_progress` while a suite of the agent is `running` |
+| `POST /eval-cases/:id/run` | `200` `EvalDryRunResult`; one stateless model call, nothing stored, no suite row; optional body `{ expected_output?, agent_id? }`: `expected_output` overrides the expectation for scoring only, `agent_id` is the host of a skill-owned case (G1) | `404` (case, or the case's skill/owner agent); `422 host_required` (skill case, no host), `422 host_not_found`, `422 host_not_allowed` (agent case with `agent_id`), checked before any model call; `422 file_not_in_diff` for an override outside the frozen file; a call failure is `200` `outcome: error`; rate-limited like the dry-run. Same note: no spec |
+| `DELETE /eval-cases/:id` | `200` `{ ok: true }` | `404`; `409 eval_run_in_progress` while a suite of the case's **owner** (agent or skill) is `running` |
 | `POST /agents/:id/eval-runs` | `202` `EvalSuiteRun` (`status: running`) | `404`; `409 eval_run_in_progress`; `422 no_cases`; `422 too_many_cases` (more than 100) |
+| `GET /skills/:id/eval-cases` | `200` `EvalCase[]` of the skill, ordered by `name` (G1) | `404` unknown or foreign skill |
+| `POST /skills/:id/eval-cases` | `201` `EvalCase` written by hand for the skill; same body and build as the agent route (G1) | `404` skill; `422 invalid_diff`, `too_many_cases`; `409 eval_run_in_progress`; `413` over 256 KB; `429` (30/min) |
+| `POST /skills/:id/eval-cases/copy` | `201` `EvalCase`: body `{ case_id }` of an agent case; name, diff, files, meta, expectation (incl. `source`) and notes are copied, the source row is not touched; copying twice makes two rows (G1) | `404` skill or source; `422 not_agent_case` (source is a skill case); `409`; `422 too_many_cases`; `429` (30/min) |
+| `POST /skills/:id/eval-runs` | `202` `EvalSuiteRun` (`owner_kind: skill`): body `{ agent_id }` is the host agent (G1) | `404` skill; `422 validation_error` (no/unknown keys), `422 host_not_found`, `422 no_cases`, `422 too_many_cases`; `409 eval_run_in_progress`; `429` (5/min) |
+| `GET /skills/:id/eval-runs` | `200` `EvalSuiteRun[]` of the skill, newest first, at most 50 (G1) | `404` unknown or foreign skill |
 | `GET /eval-runs/:id` | `200` `EvalSuiteRunDetail`: the suite plus one record per case that still exists, in `case_ids` order | `404` |
 | `GET /agents/:id/eval-runs` | `200` `EvalSuiteRun[]`, newest first, at most 50 | `404` |
 | `GET /eval/dashboard` | `200` `EvalDashboardRow[]` | — |
@@ -64,6 +69,43 @@ under `NODE_ENV=test`, because the rate-limit plugin is registered only outside
 test (`src/app.ts:112-113`). The read routes, including `GET /eval/dashboard`
 and `GET /eval/recent-runs`, set no per-route limit and fall under the global
 120 per minute only (`src/app.ts:113`, `routes.ts:148-164`).
+
+## Skill evals (G1)
+
+Spec: `../../specs/2026-10-17-skill-evals-server.md`. A skill owns cases
+(`eval_cases.owner_kind = skill`, `owner_id` = skill id) and runs them through a
+**host agent** chosen per run.
+
+- **Suite row.** `eval_suite_runs` has `owner_kind` (`agent` | `skill`, default
+  `agent`), `skill_id`, `skill_version` (both null for an agent suite, both set
+  for a skill suite; two CHECKs). For a skill suite `agent_id` / `agent_version`
+  are the **host's** and `skills` is exactly `[<skill name at start>]`.
+- **Prompt.** The host's system prompt plus ONE `### <skill>` block (the
+  third-party line stays for imported/community skills), the case's frozen diff
+  and meta. The host's other skills, repo map, callers, project context, intent
+  and memory are not in it. `enabledSkillsForPrompt` is never called on this
+  path. A disabled skill, a disabled host or an unlinked host still runs.
+- **One running suite per owner.** Partial unique indexes
+  `eval_suite_runs_agent_owner_running_uq` (`agent_id` where running and
+  `owner_kind = 'agent'`) and `eval_suite_runs_skill_running_uq` (`skill_id`
+  where running and `owner_kind = 'skill'`), plus an advisory lock
+  `eval-<kind>:<id>`. A skill suite therefore never blocks its host's own suite.
+  The `ON CONFLICT` arbiter repeats the full index predicate, `owner_kind`
+  included. `PATCH` / `DELETE` of a case lock and check the case's own owner.
+- **Views.** Agent history, the dashboard (`latest`, `running`, `delta`,
+  `drop`) and recent runs filter `owner_kind = 'agent'`; skill suites are listed
+  only by `GET /skills/:id/eval-runs` and `GET /eval-runs/:id`.
+- **Per-case run.** Same stateless call as for an agent; `skill_version` in the
+  result is the skill's current version (`null` for an agent case). Log line
+  `eval case <id> (skill <skill_id>): single run <outcome>, cost <usd>`, suite
+  line `eval suite <id> (skill <skill_id>): <status>, <p>/<t> passed, cost <usd>`.
+- **Unchanged.** Scoring, `maxRetries: 0`, 8192 tokens, 120 s, the boot reaper
+  (owner-agnostic). No `agent_runs` / `run_traces`. A deleted skill's cases and
+  suites become unreachable and stay in the tables (`PATCH` / `DELETE` keep
+  working by case id).
+- **Finding de-dup stays agent-only**: a skill copy with the same
+  `source.finding_id` does not block "Turn into eval case".
+- Tests: `test/eval-skill-cases.it.test.ts`, `test/eval-skill-runs.it.test.ts`.
 
 ## Frozen input
 
@@ -263,7 +305,8 @@ Suite status as stored in `eval_suite_runs.status`, with a `CHECK` constraint
   it as `202`. The cases then run detached and sequentially in
   `EvalSuiteExecutor`.
 - **One running suite per agent**: the partial unique index
-  `eval_suite_runs_agent_running_uq` (`src/db/schema/eval.ts:77-79`) plus the
+  `eval_suite_runs_agent_owner_running_uq` (`src/db/schema/eval.ts`, since
+  migration 0016; skill suites have their own, see "Skill evals") plus the
   advisory lock. A lost race is `409 eval_run_in_progress`, never a second
   suite. Cases cannot be deleted meanwhile (same `409`).
 - **Progress**: after each case, the `eval_runs` row and the suite counters are

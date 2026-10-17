@@ -33,10 +33,13 @@ export const evalCases = pgTable('eval_cases', {
 });
 
 /**
- * One suite run: every case of an agent, run once, aggregated. `agent_id` has
- * no FK on purpose (a deleted agent's suite runs are not cleaned up, spec A
- * NG-10). At most one `running` suite per agent, enforced by a partial unique
- * index. Aggregate metrics are null while running or when a denominator is 0.
+ * One suite run: every case of an owner (an agent, or a skill run through a
+ * host agent), run once, aggregated. `agent_id` / `skill_id` have no FK on
+ * purpose (a deleted owner's suite runs are not cleaned up, spec A NG-10).
+ * For a skill suite `agent_id` / `agent_version` are the host's. At most one
+ * `running` suite per owner, enforced by two partial unique indexes (agent id
+ * for agent suites, skill id for skill suites). Aggregate metrics are null
+ * while running or when a denominator is 0.
  */
 export const evalSuiteRuns = pgTable(
   'eval_suite_runs',
@@ -45,9 +48,18 @@ export const evalSuiteRuns = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** `agent` = the agent's own suite; `skill` = a skill suite run through a host agent. */
+    ownerKind: text('owner_kind', { enum: ['agent', 'skill'] })
+      .notNull()
+      .default('agent'),
+    /** The agent whose config ran the cases (the owner, or the host of a skill suite). */
     agentId: uuid('agent_id').notNull(),
-    /** The agent's version when the run started. */
+    /** That agent's version when the run started. */
     agentVersion: integer('agent_version').notNull(),
+    /** The skill under test; null for an agent suite. */
+    skillId: uuid('skill_id'),
+    /** The skill's version when the run started; null for an agent suite. */
+    skillVersion: integer('skill_version'),
     status: text('status', { enum: ['running', 'done', 'partial', 'failed'] })
       .notNull()
       .default('running'),
@@ -74,9 +86,18 @@ export const evalSuiteRuns = pgTable(
     check('eval_suite_runs_status_check', sql`${t.status} IN ('running','done','partial','failed')`),
     index('eval_suite_runs_agent_ran_at_idx').on(t.agentId, t.ranAt),
     index('eval_suite_runs_workspace_id_idx').on(t.workspaceId),
-    uniqueIndex('eval_suite_runs_agent_running_uq')
+    check('eval_suite_runs_owner_kind_check', sql`${t.ownerKind} IN ('agent','skill')`),
+    check(
+      'eval_suite_runs_owner_shape_check',
+      sql`(${t.ownerKind} = 'agent' AND ${t.skillId} IS NULL AND ${t.skillVersion} IS NULL) OR (${t.ownerKind} = 'skill' AND ${t.skillId} IS NOT NULL AND ${t.skillVersion} IS NOT NULL)`,
+    ),
+    index('eval_suite_runs_skill_ran_at_idx').on(t.skillId, t.ranAt),
+    uniqueIndex('eval_suite_runs_agent_owner_running_uq')
       .on(t.agentId)
-      .where(sql`${t.status} = 'running'`),
+      .where(sql`${t.status} = 'running' AND ${t.ownerKind} = 'agent'`),
+    uniqueIndex('eval_suite_runs_skill_running_uq')
+      .on(t.skillId)
+      .where(sql`${t.status} = 'running' AND ${t.ownerKind} = 'skill'`),
   ],
 );
 

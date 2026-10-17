@@ -188,6 +188,17 @@ export const EvalCaseManualCreate = z
 export type EvalCaseManualCreate = z.infer<typeof EvalCaseManualCreate>;
 
 /**
+ * Body of `POST /skills/:id/eval-cases/copy`: copies one agent-owned case into
+ * the skill's own set (the source case is never changed).
+ */
+export const EvalCaseCopyRequest = z
+  .object({
+    case_id: z.string().uuid(),
+  })
+  .strict();
+export type EvalCaseCopyRequest = z.infer<typeof EvalCaseCopyRequest>;
+
+/**
  * Response of `GET /findings/:id/eval-case/draft` (Spec C): the case a bodiless
  * `POST /findings/:id/eval-case` would store right now, minus `source`.
  */
