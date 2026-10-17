@@ -1,4 +1,4 @@
-# Spec: Skill evals — skill-owned cases and suite runs (server + contracts) | Spec ID: SPEC-2026-10-17-skill-evals-server | Status: approved
+# Spec: Skill evals — skill-owned cases and suite runs (server + contracts) | Spec ID: SPEC-2026-10-17-skill-evals-server | Status: implemented
 Supersedes: amends [SPEC-2026-10-12-eval-cases-and-scoring](2026-10-12-eval-cases-and-scoring.md) NG-1 ("only agents own cases") and the "Skill-owned eval cases" out-of-scope line of [02-skills-for-review-agents](02-skills-for-review-agents.md); amends the baseline routes shipped without a spec (D-2) for skill-owned cases. Both older specs keep their text (same rule Spec E applied to B and D); the amendment lives here and in the index `specs/eval-pipeline.md`.
 Modules: server, @devdigest/shared (contracts)
 Approved: 2026-10-17 (user)

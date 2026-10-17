@@ -1,4 +1,4 @@
-# Spec: Eval case rows show their last result (agent and skill Evals tabs) | Spec ID: SPEC-2026-10-17-eval-case-row-status | Status: approved
+# Spec: Eval case rows show their last result (agent and skill Evals tabs) | Spec ID: SPEC-2026-10-17-eval-case-row-status | Status: implemented
 Supersedes: amends the presentation of [SPEC-2026-10-15-eval-ui-design-alignment](2026-10-15-eval-ui-design-alignment.md) AC-15 (second line of a case row) and the label of the run control of [SPEC-2026-10-12-eval-run-history-compare](2026-10-12-eval-run-history-compare.md) AC-1 ("Run eval (n)"); both keep their text, the amendment lives here and in `specs/eval-pipeline.md`.
 Modules: client
 Approved: 2026-10-17 (user)

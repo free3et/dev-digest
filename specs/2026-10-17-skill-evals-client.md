@@ -1,4 +1,4 @@
-# Spec: Skill evals — Evals tab and "Run on evals" on the Skills page (client) | Spec ID: SPEC-2026-10-17-skill-evals-client | Status: approved
+# Spec: Skill evals — Evals tab and "Run on evals" on the Skills page (client) | Spec ID: SPEC-2026-10-17-skill-evals-client | Status: implemented
 Supersedes: amends the "Evals tab and Run on evals button" out-of-scope lines of [02-skills-for-review-agents](02-skills-for-review-agents.md) (`:47-48,87`); reuses the agent Evals-tab building blocks of Specs A–F and the baseline shipped without a spec (D-3). The older specs keep their text; the amendment lives here and in `specs/eval-pipeline.md`.
 Modules: client
 Approved: 2026-10-17 (user)
