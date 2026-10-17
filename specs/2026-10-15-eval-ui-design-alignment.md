@@ -68,7 +68,7 @@ Spec B and Spec D stay `approved`, and their bodies are not edited (same rule as
 | Spec D AC-13…AC-16 (regression banner) | **Unchanged in text and rules.** Only its look changes (AC-18). |
 | Spec D AC-18, AC-19, Spec B AC-12 (empty / error states) | **Unchanged** (AC-20). |
 | Spec D NFR-1 (text, never colour alone; decorative bars) | **Kept and extended** by NFR-1 here. |
-| Spec A AC-7 (case "expectation kind as a text badge") | **Amended in wording.** The badge text is "Positive" / "Negative", and the accessible name keeps "must find" / "must not flag" (AC-14). |
+| Spec A AC-7 (case "expectation kind as a text badge") | **Amended in wording, then restored (C-17).** The badge text is "Must find" / "Must not flag", and the accessible name keeps "must find" / "must not flag" (AC-14). |
 
 ## User stories
 
@@ -233,9 +233,9 @@ Terms:
 
 **Evals tab**
 
-- **AC-14** — WHEN the case list renders a case, its kind badge SHALL read "Positive" for `must_find` or "Negative" for `must_not_flag` (small uppercase). It has the accessible name and tooltip "Positive case · must find" / "Negative case · must not flag", and a green (positive) or amber (negative) tint.
+- **AC-14** — WHEN the case list renders a case, its kind badge SHALL read "Must find" for `must_find` or "Must not flag" for `must_not_flag` (small uppercase). It has the accessible name and tooltip "Positive case · must find" / "Negative case · must not flag", and a green (positive) or amber (negative) tint.
   - Source: G-3, US-3, D-1 (Spec C wording), D-2, D-3, Spec A AC-7 (amended in wording), C-11
-  - Verify: component (RTL): `getByLabelText("Positive case · must find")` and `getByTitle("Negative case · must not flag")`; visible texts "Positive" / "Negative"; `queryByText("must find")` finds no visible badge text; i18n assertion: `evalsTab.kind.*` keys and their `*Name` siblings exist
+  - Verify: component (RTL): `getByLabelText("Positive case · must find")` and `getByTitle("Negative case · must not flag")`; visible texts "Must find" / "Must not flag"; i18n assertion: `evalsTab.kind.*` keys and their `*Name` siblings exist
 
 - **AC-15** — WHEN the case list renders a case, the row SHALL show on its first line:
   - the badge;
@@ -418,3 +418,4 @@ All dated 2026-10-15. The source is the user's feedback relayed by the main sess
 - **OQ-1** [NEEDS CLARIFICATION: Pull in the model chip? It needs either a new `agent_model` field on `EvalDashboardRow` / `EvalRecentRun` (a contract and server change, against C-2) or an extra `GET /agents` request (against NFR-2). Default: **no**, so it stays NG-1 and becomes a follow-up spec.]
 - **OQ-2** [NEEDS CLARIFICATION: The card shows a small point delta under each big metric ("▲ 4 pt"), which the mockup's row does not have, so that Spec D's dashboard deltas and the meaning of "drop" stay visible. Keep it? Default: **keep** (AC-7 as written). The alternative is the number only, as in the mockup, with the delta dropped from the dashboard and Spec D AC-21 superseded in content.]
 - **OQ-3** [NEEDS CLARIFICATION: Split the 20 AC into E1 "dashboard" (AC-1…AC-11, AC-20) and E2 "Evals tab, compare and shared formats" (AC-12…AC-19)? Default: **keep one spec** (C-15).]
+- **C-17** (2026-10-17, user) Case-kind badge wording reverted from "Positive" / "Negative" (C-11) to "Must find" / "Must not flag": the user wants the badge to name the expectation itself, as in the reference Evals screen. The accessible name and tooltip ("Positive case · must find" / "Negative case · must not flag") are unchanged. Spec C's banner wording is unchanged.
