@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { Verdict, Finding } from './findings.js';
-import { EvalRun, EvalOwnerKind, Conformance } from './knowledge.js';
+import {
+  EvalRun,
+  EvalOwnerKind,
+  EvalExpectationKind,
+  EvalExpectationInput,
+  Conformance,
+  Provider,
+  CiFailOn,
+} from './knowledge.js';
 
 /**
  * A4 — Eval / CI / Compose / Conformance API contracts (L06).
@@ -29,21 +37,194 @@ export const EvalCaseInput = z.object({
 });
 export type EvalCaseInput = z.infer<typeof EvalCaseInput>;
 
-/** A persisted eval run row (one execution of a case), returned by the API. */
+/** Metric in 0..1; null when its denominator is 0, the case errored, or the run is still going. */
+const Metric = z.number().min(0).max(1).nullable();
+
+/** Lifecycle of one suite run (`eval_suite_runs.status`). */
+export const EvalSuiteStatus = z.enum(['running', 'done', 'partial', 'failed']);
+export type EvalSuiteStatus = z.infer<typeof EvalSuiteStatus>;
+
+/** Result of one case inside a suite. `error` is excluded from metrics. */
+export const EvalCaseOutcome = z.enum(['passed', 'failed', 'error']);
+export type EvalCaseOutcome = z.infer<typeof EvalCaseOutcome>;
+
+/**
+ * What a case run produced, stored in `eval_runs.actual_output`: kept findings
+ * and every dropped finding with its grounding reason, plus the per-case scoring
+ * fields (also surfaced as top-level `EvalRunRecord` fields). On `error`,
+ * `kept` and `dropped` are empty.
+ */
+export const EvalActualOutput = z.object({
+  kept: z.array(Finding),
+  dropped: z.array(z.object({ finding: Finding, reason: z.string() })),
+  outcome: EvalCaseOutcome,
+  expectation_kind: EvalExpectationKind,
+  matched: z.boolean().nullable(),
+  findings_kept: z.number().int().min(0).nullable(),
+  findings_dropped: z.number().int().min(0).nullable(),
+  error: z.string().nullable(),
+});
+export type EvalActualOutput = z.infer<typeof EvalActualOutput>;
+
+/** A persisted eval run row (one execution of a case in a suite), returned by the API. */
 export const EvalRunRecord = z.object({
   id: z.string(),
   case_id: z.string(),
   case_name: z.string().nullish(),
+  /** null only for a per-case run outside a suite. */
+  suite_run_id: z.string().nullable(),
   ran_at: z.string(),
-  actual_output: z.unknown(),
+  actual_output: EvalActualOutput,
+  /** null = `error`. */
   pass: z.boolean().nullable(),
-  recall: z.number().nullable(),
-  precision: z.number().nullable(),
-  citation_accuracy: z.number().nullable(),
+  outcome: EvalCaseOutcome,
+  expectation_kind: EvalExpectationKind,
+  /** null on `error`. */
+  findings_kept: z.number().int().min(0).nullable(),
+  findings_dropped: z.number().int().min(0).nullable(),
+  /** An expectation intersected by >= 1 kept finding; null on `error`. */
+  matched: z.boolean().nullable(),
+  error: z.string().nullable(),
+  recall: Metric,
+  precision: Metric,
+  citation_accuracy: Metric,
   duration_ms: z.number().int().nullable(),
   cost_usd: z.number().nullable(),
 });
 export type EvalRunRecord = z.infer<typeof EvalRunRecord>;
+
+/**
+ * One suite run: every case of an owner (an agent or a skill), run once,
+ * aggregated (`eval_suite_runs`). For a skill suite `agent_id` /
+ * `agent_version` are the host agent whose config ran the cases.
+ */
+export const EvalSuiteRun = z.object({
+  id: z.string(),
+  /** `agent` = the owner's own suite; `skill` = a skill suite run through a host agent. */
+  owner_kind: EvalOwnerKind,
+  /** The agent whose config ran the cases (the owner, or the host of a skill suite). */
+  agent_id: z.string(),
+  /** That agent's version when the run started. */
+  agent_version: z.number().int(),
+  /** The skill under test; null for an agent suite. */
+  skill_id: z.string().nullable(),
+  /** The skill's version when the run started; null for an agent suite. */
+  skill_version: z.number().int().nullable(),
+  status: EvalSuiteStatus,
+  ran_at: z.string(),
+  /** null while running. */
+  finished_at: z.string().nullable(),
+  /** The case set frozen at start. */
+  case_ids: z.array(z.string()),
+  /** Enabled skill names in prompt order at start. */
+  skills: z.array(z.string()),
+  cases_total: z.number().int().min(0),
+  cases_completed: z.number().int().min(0),
+  cases_passed: z.number().int().min(0),
+  cases_errored: z.number().int().min(0),
+  recall: Metric,
+  precision: Metric,
+  citation_accuracy: Metric,
+  /** Sum of non-null per-case costs; null when all are null. */
+  cost_usd: z.number().nullable(),
+  /** null while running. */
+  duration_ms: z.number().int().nullable(),
+  /** Reason for `failed`. */
+  error: z.string().nullable(),
+});
+export type EvalSuiteRun = z.infer<typeof EvalSuiteRun>;
+
+/** `GET /eval-runs/:id`: the suite plus one record per case that still exists, in `case_ids` order. */
+export const EvalSuiteRunDetail = EvalSuiteRun.extend({
+  cases: z.array(EvalRunRecord),
+});
+export type EvalSuiteRunDetail = z.infer<typeof EvalSuiteRunDetail>;
+
+/**
+ * Body of `POST /eval-cases/:id/run` and (without `agent_id`) of
+ * `POST /findings/:id/eval-case/dry-run`. The expectation may be overridden and
+ * is used for scoring only, never sent to the model. `agent_id` is the host of a
+ * skill-owned case; it must be absent for an agent-owned case.
+ */
+export const EvalDryRunRequest = z
+  .object({
+    expected_output: EvalExpectationInput.optional(),
+    agent_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type EvalDryRunRequest = z.infer<typeof EvalDryRunRequest>;
+
+/** Body of `POST /skills/:id/eval-runs`: the host agent whose prompt and model run the skill's cases. */
+export const EvalSuiteStartRequest = z
+  .object({
+    agent_id: z.string().uuid(),
+  })
+  .strict();
+export type EvalSuiteStartRequest = z.infer<typeof EvalSuiteStartRequest>;
+
+/**
+ * Result of one stateless dry-run of a would-be case (Spec C). Nothing is
+ * stored. `outcome: error` still answers 200: null counts, empty lists,
+ * `cost_usd` null, redacted `error` text.
+ */
+export const EvalDryRunResult = z.object({
+  outcome: EvalCaseOutcome,
+  /** null = `error`. */
+  pass: z.boolean().nullable(),
+  expectation_kind: EvalExpectationKind,
+  /** An expectation intersected by >= 1 kept finding; null on `error`. */
+  matched: z.boolean().nullable(),
+  /** Kept findings that intersect the expectation; null on `error`. */
+  matched_count: z.number().int().min(0).nullable(),
+  findings_kept: z.number().int().min(0).nullable(),
+  findings_dropped: z.number().int().min(0).nullable(),
+  kept: z.array(Finding),
+  dropped: z.array(z.object({ finding: Finding, reason: z.string() })),
+  duration_ms: z.number().int(),
+  /** null = unknown (errored or timed-out call). */
+  cost_usd: z.number().nullable(),
+  /** The agent version whose config was used. */
+  agent_version: z.number().int(),
+  /** The skill's version for a skill-owned case; null for an agent-owned case or a finding dry-run. */
+  skill_version: z.number().int().nullable(),
+  /** Redacted, at most 300 chars. */
+  error: z.string().nullable(),
+});
+export type EvalDryRunResult = z.infer<typeof EvalDryRunResult>;
+
+/** One agent on the Eval Dashboard (`GET /eval/dashboard`). */
+export const EvalDashboardRow = z.object({
+  agent_id: z.string(),
+  agent_name: z.string(),
+  cases_total: z.number().int().min(1),
+  /** Latest finished (`done` or `partial`) suite; null = none yet. */
+  latest: EvalSuiteRun.nullable(),
+  /** A suite of this agent is `running` now. */
+  running: z.boolean(),
+  /** latest minus the previous finished run; null when there is none or either value is null. */
+  delta: z.object({
+    recall: z.number().nullable(),
+    precision: z.number().nullable(),
+    citation_accuracy: z.number().nullable(),
+  }),
+  /** true when `delta.recall` < 0 or `delta.precision` < 0. */
+  drop: z.boolean(),
+});
+export type EvalDashboardRow = z.infer<typeof EvalDashboardRow>;
+
+/** Query of `GET /eval/recent-runs`: `limit` 1..50, default 10. */
+export const EvalRecentRunsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export type EvalRecentRunsQuery = z.infer<typeof EvalRecentRunsQuery>;
+
+/**
+ * One finished (`done` or `partial`) suite run of any agent in the workspace
+ * (`GET /eval/recent-runs`). `agent_name` is the agent's CURRENT name; metrics
+ * are nullable as on `EvalSuiteRun`.
+ */
+export const EvalRecentRun = EvalSuiteRun.extend({ agent_name: z.string() });
+export type EvalRecentRun = z.infer<typeof EvalRecentRun>;
 
 /** Result of running a single case: the metrics (EvalRun) + the persisted row id. */
 export const EvalRunResult = z.object({
@@ -141,6 +322,35 @@ export const CiFile = z.object({
 });
 export type CiFile = z.infer<typeof CiFile>;
 
+/**
+ * AgentManifest — the agent contract shared by the studio and the CI runner.
+ *
+ * The studio (`CiService.agentYaml`) WRITES this shape to
+ * `.devdigest/agents/<slug>.yaml`; the agent-runner READS it. Keeping one Zod
+ * schema for both ends guarantees the formats never drift. `skills` are slugs
+ * resolved to `.devdigest/skills/<slug>.md`.
+ */
+export const AgentManifest = z.object({
+  name: z.string().min(1),
+  provider: Provider.default('openrouter'),
+  model: z.string().min(1),
+  system_prompt: z.string(),
+  // Tolerate both a missing key and an explicit `null` (YAML `skills:` with no
+  // value parses to null, which `.default([])` does NOT catch) — normalize both
+  // to an empty array so manifests without skills validate cleanly.
+  skills: z
+    .array(z.string())
+    .nullish()
+    .transform((v) => v ?? []),
+  strategy: z.enum(['auto', 'single-pass', 'map-reduce']).default('auto'),
+  // CI gate policy (see CiFailOn) — when the posted review should BLOCK
+  // (REQUEST_CHANGES + fail the check) vs just comment. Default: block on critical.
+  ci_fail_on: CiFailOn.default('critical'),
+});
+export type AgentManifest = z.infer<typeof AgentManifest>;
+/** Caller-facing input type — `.default()` fields stay optional. */
+export type AgentManifestInput = z.input<typeof AgentManifest>;
+
 /** Request body for `POST /agents/:id/export-ci`. */
 export const CiExportInput = z.object({
   repo: z.string().min(1), // "owner/name"
@@ -217,7 +427,7 @@ export type CiResultArtifact = z.infer<typeof CiResultArtifact>;
 export const ConformanceInput = z.object({
   /** Spec path/id to compare against; if omitted, the first available spec. */
   spec: z.string().nullish(),
-  provider: z.enum(['openai', 'anthropic']).nullish(),
+  provider: z.enum(['openai', 'anthropic', 'openrouter']).nullish(),
   model: z.string().nullish(),
 });
 export type ConformanceInput = z.infer<typeof ConformanceInput>;

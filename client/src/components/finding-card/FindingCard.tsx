@@ -20,6 +20,7 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
+import { EvalCaseControl } from "./EvalCaseControl";
 import { githubBlobUrl } from "@/lib/github-urls";
 import { s } from "./styles";
 
@@ -31,6 +32,7 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  agentId,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -39,6 +41,9 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** The agent whose review produced this finding (`ReviewRecord.agent_id`).
+   *  Enables the eval-case control on decided findings (Spec A AC-5). */
+  agentId?: string | null;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
@@ -50,6 +55,7 @@ export function FindingCard({
   const accepted = !!f.accepted_at;
   const dismissed = !!f.dismissed_at;
   const muted = accepted || dismissed;
+  const showEvalControl = !!onAction && !!agentId && muted;
 
   return (
     <div data-finding-id={f.id} style={s.card(!!focused, sevColor, muted)}>
@@ -109,6 +115,7 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {showEvalControl && <EvalCaseControl f={f} agentId={agentId} />}
           </div>
         </div>
       )}

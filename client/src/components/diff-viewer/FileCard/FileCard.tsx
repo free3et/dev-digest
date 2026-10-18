@@ -148,6 +148,7 @@ export function FileCard({
                   pending={findings.pendingFindingId === f.id}
                   repoFullName={findings.repoFullName}
                   headSha={findings.headSha}
+                  agentId={findings.agentIdFor?.(f.id)}
                 />
               ))}
             </div>

@@ -1,6 +1,6 @@
 # onion-architecture
 
-Version **1.0.0** · scope: backend layering for `server/`, `reviewer-core/`, `e2e/`
+Version **1.2.0** · scope: backend layering for `server/`, `reviewer-core/`, `e2e/`
 (pragmatic Onion: dependency direction, no invented entity layer).
 
 Skill: [SKILL.md](SKILL.md). Annotated notes and verification status per source:
@@ -53,4 +53,9 @@ the existing service + repository + container shape; they do not replace it.
 
 ## Changelog
 
+- **1.2.0** — cross-module rule widened from four filenames to the whole
+  module folder (`run-executor`, `schemas`, `index.ts` barrels, sub-folders);
+  new check that every write in a service-owned transaction receives `tx`.
+- **1.1.0** — `routes.ts` calling `XService.fromContainer(container)` at
+  registration is allowed (it is the repo's pattern); added `evals/`.
 - **1.0.0** — initial skill.

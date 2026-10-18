@@ -83,7 +83,7 @@ describe("SkillsView list", () => {
   });
 
   it("selects the first skill and the Config tab by default; stale id and bad tab fall back", async () => {
-    nav.set("id=gone&tab=evals");
+    nav.set("id=gone&tab=nope"); // "evals" is a real tab since Spec G2
     mockFetch(ROUTES);
     renderWithProviders(<SkillsView />);
     const detail = await screen.findByRole("region", { name: "test-quality" });
@@ -257,5 +257,59 @@ describe("Add Skill menu and drawer", () => {
     fireEvent.change(input, { target: { files: [new File(["x"], "run.sh")] } });
     expect(await screen.findByText("Only .md and .zip files are supported.")).toBeInTheDocument();
     expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+});
+
+describe("Evals tab and Run on evals (Spec G2)", () => {
+  const evalCase = (id: string) => ({
+    id, owner_kind: "skill", owner_id: "s1", name: `src/a.ts:1 ${id}`, input_diff: "", input_files: ["src/a.ts"],
+    input_meta: { pr_number: 1, pr_title: "t", pr_body: null, repo: "o/r" },
+    expected_output: { kind: "must_find", file: "src/a.ts", start_line: 1, end_line: 1, title: "t", severity: "WARNING", category: "x", source: null },
+    notes: null,
+  });
+  const EVAL_ROUTES = {
+    ...ROUTES,
+    "GET /agents": [{ id: "h1", name: "Reviewer A", model: "gpt-x" }],
+    "GET /skills/s1/stats": { agents: [{ id: "h1", name: "Reviewer A", enabled: true }] },
+    "GET /skills/s1/eval-cases": [evalCase("c1"), evalCase("c2")],
+    "GET /skills/s1/eval-runs": [],
+  };
+
+  it("?tab=evals selects the Evals tab, listed after Context (AC-1)", async () => {
+    nav.set("id=s1&tab=evals");
+    mockFetch(EVAL_ROUTES);
+    renderWithProviders(<SkillsView />);
+    const detail = await screen.findByRole("region", { name: "test-quality" });
+    expect(within(detail).getByRole("button", { name: "Evals" })).toBeInTheDocument();
+    const labels = within(detail)
+      .getAllByRole("button")
+      .map((b) => b.textContent)
+      .filter((x) => ["Config", "Preview", "Stats", "Versions", "Context", "Evals"].includes(x ?? ""));
+    expect(labels).toEqual(["Config", "Preview", "Stats", "Versions", "Context", "Evals"]);
+    expect(await within(detail).findByRole("combobox", { name: "Host agent" })).toBeInTheDocument();
+  });
+
+  it("Run on evals from Config: confirm, one POST, then the URL moves to the Evals tab with progress (AC-9)", async () => {
+    nav.set("id=s1&tab=config");
+    const running = {
+      id: "r1", owner_kind: "skill", agent_id: "h1", agent_version: 2, skill_id: "s1", skill_version: 5,
+      status: "running", ran_at: "2026-10-12T09:00:00.000Z", finished_at: null, case_ids: ["c1", "c2"], skills: [],
+      cases_total: 2, cases_completed: 0, cases_passed: 0, cases_errored: 0, recall: null, precision: null,
+      citation_accuracy: null, cost_usd: null, duration_ms: null, error: null,
+    };
+    const calls = mockFetch({
+      ...EVAL_ROUTES,
+      "POST /skills/s1/eval-runs": running,
+      "GET /eval-runs/r1": { ...running, cases: [] },
+    });
+    renderWithProviders(<SkillsView />);
+    const button = await screen.findByRole("button", { name: "Run on evals" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Run eval" }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/skills?id=s1&tab=evals"));
+    expect(await screen.findByText("0 / 2 cases")).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 });

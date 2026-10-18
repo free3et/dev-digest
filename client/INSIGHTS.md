@@ -101,6 +101,14 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-10-17** — Shared eval parts take an owner (`{agentId}` or
+  `{owner: {kind, id}}`) resolved by `resolveOwner`; the `useOwner*` dispatchers
+  call the inactive kind's hook with `null`, so it sends nothing. Any test that
+  does `vi.mock("@/lib/hooks/eval")` (`AgentEditor.test.tsx`) must list the
+  dispatcher hooks too, or it fails with `No "useOwnerEvalCases" export is
+  defined on the mock`. A skill suite leaving `running` invalidates
+  `["skill-eval-runs", skill_id]` only (its `agent_id` is the host).
+  `src/components/agent-evals/helpers.ts`, `src/lib/hooks/eval.ts`
 - **2026-10-07** — A deep-link prop such as `focusFile` must reach every
   collapsed ancestor, not just the leaf: `SmartDiffGroup` does not render its
   `DiffViewer` while closed (docs and boilerplate groups start closed), so the
@@ -159,6 +167,11 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-10-16** — Recharts `ResponsiveContainer` renders nothing in jsdom
+  (zero size), so a trend chart test finds no SVG. Mock it to a fixed size in
+  the test (see `TESTING.md`); the vendored `LineChart` also draws `null` as 0,
+  so use Recharts directly for gaps. Pin `TZ=UTC` in `client/vitest.config.ts`
+  (`process.env.TZ`) or local-timestamp assertions differ per machine.
 - **2026-10-06** — `mockFetch` in `src/test/render.tsx` only answers 200, or 404
   for an unmatched route, so an error or `409` path cannot be driven through
   it: stub fetch by hand with `vi.stubGlobal("fetch", …)` returning a

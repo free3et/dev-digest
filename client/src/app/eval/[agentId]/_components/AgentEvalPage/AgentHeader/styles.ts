@@ -1,0 +1,52 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
+  back: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    fontSize: 13,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  row: { display: "flex", alignItems: "flex-start", gap: 16 } satisfies CSSProperties,
+  // Long names must not push the controls out (client INSIGHTS 2026-09-26): this column shrinks, controls do not.
+  titleCol: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  } satisfies CSSProperties,
+  titleRow: { display: "flex", alignItems: "center", gap: 10, minWidth: 0 } satisfies CSSProperties,
+  h1: {
+    fontSize: 20,
+    fontWeight: 700,
+    margin: 0,
+    minWidth: 0,
+    flexShrink: 1,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  } satisfies CSSProperties,
+  chip: { display: "inline-flex", flexShrink: 0, maxWidth: "50%" } satisfies CSSProperties,
+  subtitle: { fontSize: 13, color: "var(--text-secondary)", margin: 0 } satisfies CSSProperties,
+  controls: { display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 } satisfies CSSProperties,
+  evalsLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    height: 32,
+    padding: "0 12px",
+    fontSize: 13,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    color: "var(--text-primary)",
+    background: "var(--bg-elevated)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--border)",
+    borderRadius: 8,
+  } satisfies CSSProperties,
+} as const;

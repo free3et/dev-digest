@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, ReviewRecord } from "@devdigest/shared";
-import { latestFindingsPerAgent } from "./helpers";
+import { findingAgentIds, latestFindingsPerAgent } from "./helpers";
 
 function finding(over: Partial<FindingRecord>): FindingRecord {
   return {
@@ -85,5 +85,18 @@ describe("latestFindingsPerAgent", () => {
 
   it("returns empty for no reviews", () => {
     expect(latestFindingsPerAgent([])).toEqual([]);
+  });
+});
+
+describe("findingAgentIds", () => {
+  it("maps every finding to the agent of its review", () => {
+    const reviews: ReviewRecord[] = [
+      review({ id: "a", agent_id: "a1", findings: [finding({ id: "f1" })] }),
+      review({ id: "b", agent_id: null, findings: [finding({ id: "f2" })] }),
+    ];
+    const ids = findingAgentIds(reviews);
+    expect(ids.get("f1")).toBe("a1");
+    expect(ids.get("f2")).toBeNull();
+    expect(ids.has("zzz")).toBe(false);
   });
 });

@@ -29,19 +29,34 @@ flowchart TD
 
   CONTEXT["/repos/:repoId/context<br/>Project Context<br/>(list · preview · edit)"]
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills)"]
-  SKILLS["/skills<br/>cards · preview · editor · import"]
+  SKILLS["/skills<br/>cards · preview · editor · import<br/>Evals tab (?tab=evals) · Run on evals"]
   SETTINGS["/settings/:section<br/>API keys · models"]
+  EVALS["/eval<br/>Eval Dashboard"]
+  EVALPAGE["/eval/:agentId<br/>per-agent eval page<br/>(cards · trend · runs · compare)"]
+  EVALS -->|"card chevron · recent-run link"| EVALPAGE
+  EVALPAGE -->|"Open Evals tab"| AGENT
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   CONTEXT -->|"GET /repos/:id/context · GET|PUT /repos/:id/context/file"| API
   AGENTS -->|"/agents · /agents/:id"| API
+  AGENT -->|"Evals tab (?tab=evals)<br/>GET|POST /agents/:id/eval-cases · eval-runs"| API
+  PR -->|"GET /findings/:id/eval-case/draft<br/>POST /findings/:id/eval-case/dry-run · POST /findings/:id/eval-case"| API
+  EVALS -->|"GET /eval/dashboard · GET /eval/recent-runs?limit=50"| API
+  EVALPAGE -->|"GET /agents/:id · GET|POST /agents/:id/eval-runs · GET /agents/:id/eval-cases<br/>GET /eval/dashboard (switcher)"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
 
 Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
 `g`-then-key shortcuts). Pages are thin; feature logic sits in colocated
 `_components/<Name>/` folders, each with its own `*.test.tsx`.
+
+Eval pipeline UI (the "Turn into eval case" control on `FindingCard` and the
+`EvalCaseModal` it opens (draft, edit, dry-run, save), the agent Evals tab with
+its regression banner and compare dialog, the `/eval` dashboard with recent
+runs and recall sparklines, and the per-agent eval page `/eval/:agentId` with
+metric cards and a trend chart; the skill Evals tab and Run on evals reuse the
+shared `agent-evals` parts with an owner prop): [`docs/eval-ui.md`](docs/eval-ui.md).
 
 ## Testing
 

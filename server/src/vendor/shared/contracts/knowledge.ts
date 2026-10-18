@@ -70,18 +70,150 @@ export type EvalRun = z.infer<typeof EvalRun>;
 export const EvalOwnerKind = z.enum(['skill', 'agent']);
 export type EvalOwnerKind = z.infer<typeof EvalOwnerKind>;
 
+/** What a case asserts about its one finding location (Spec A, Contracts). */
+export const EvalExpectationKind = z.enum(['must_find', 'must_not_flag']);
+export type EvalExpectationKind = z.infer<typeof EvalExpectationKind>;
+
+/**
+ * The frozen expectation of an eval case, derived from a finding the user
+ * accepted (`must_find`) or dismissed (`must_not_flag`). Scoring uses only
+ * `kind`, `file`, `start_line`, `end_line`; `title`/`severity`/`category` and
+ * `source` are informational.
+ */
+export const EvalExpectation = z
+  .object({
+    kind: EvalExpectationKind,
+    file: z.string(),
+    start_line: z.number().int().min(1),
+    end_line: z.number().int().min(1),
+    title: z.string(),
+    severity: z.string(),
+    category: z.string(),
+    /** null for a case written by hand (`POST /agents/:id/eval-cases`), not derived from a finding. */
+    source: z
+      .object({
+        finding_id: z.string(),
+        review_id: z.string(),
+        pr_id: z.string(),
+        /** "owner/name" */
+        repo: z.string(),
+        head_sha: z.string(),
+        agent_id: z.string(),
+        /** null when the review has no run. */
+        run_id: z.string().nullable(),
+      })
+      .nullable(),
+  })
+  .refine((e) => e.end_line >= e.start_line, {
+    message: 'end_line must be >= start_line',
+    path: ['end_line'],
+  });
+export type EvalExpectation = z.infer<typeof EvalExpectation>;
+
+/** Frozen PR metadata of a case (`input_meta`). `pr_body` null = PR had no body. */
+export const EvalCaseMeta = z.object({
+  pr_number: z.number().int(),
+  pr_title: z.string(),
+  pr_body: z.string().nullable(),
+  /** "owner/name" */
+  repo: z.string(),
+});
+export type EvalCaseMeta = z.infer<typeof EvalCaseMeta>;
+
 export const EvalCase = z.object({
   id: z.string(),
   owner_kind: EvalOwnerKind,
   owner_id: z.string(),
+  /** `<file>:<start_line> <title>`, title cut to 120 chars (built by the server). */
   name: z.string(),
+  /** Single-file unified diff of `expected_output.file`. */
   input_diff: z.string(),
-  input_files: z.unknown(),
-  input_meta: z.unknown(),
-  expected_output: z.unknown(),
-  notes: z.string().nullish(),
+  /** One path: `expected_output.file`. */
+  input_files: z.array(z.string()),
+  input_meta: EvalCaseMeta,
+  expected_output: EvalExpectation,
+  notes: z.string().nullable(),
 });
 export type EvalCase = z.infer<typeof EvalCase>;
+
+/**
+ * The caller-editable part of an expectation (Spec C): `EvalExpectation`
+ * without `source` (the server always builds that). `.strict()` rejects unknown
+ * keys (no mass assignment); string caps bound the body. Scoring reads only
+ * `kind`, `file`, `start_line`, `end_line`.
+ */
+export const EvalExpectationInput = z
+  .object({
+    kind: EvalExpectationKind,
+    file: z.string().min(1).max(1000),
+    start_line: z.number().int().min(1),
+    end_line: z.number().int().min(1),
+    title: z.string().max(500),
+    severity: z.string().max(500),
+    category: z.string().max(500),
+  })
+  .strict()
+  .refine((e) => e.end_line >= e.start_line, {
+    message: 'end_line must be >= start_line',
+    path: ['end_line'],
+  });
+export type EvalExpectationInput = z.infer<typeof EvalExpectationInput>;
+
+/**
+ * Optional body of `POST /findings/:id/eval-case` (Spec C). Only the name and
+ * the expectation may be supplied; frozen input and owner are derived by the
+ * server. No body or `{}` = Spec A behaviour.
+ */
+export const EvalCaseOverrides = z
+  .object({
+    name: z.string().trim().min(1).max(500).optional(),
+    expected_output: EvalExpectationInput.optional(),
+  })
+  .strict();
+export type EvalCaseOverrides = z.infer<typeof EvalCaseOverrides>;
+
+/**
+ * Body of `POST /agents/:id/eval-cases`: a case written by hand, not derived
+ * from a finding. `patch` is the hunks of ONE file (the part of a unified diff
+ * from the first `@@`); the server wraps it in the headers of
+ * `expected_output.file`. The stored `source` is null.
+ */
+export const EvalCaseManualCreate = z
+  .object({
+    name: z.string().trim().min(1).max(500),
+    patch: z.string().min(1).max(200_000),
+    expected_output: EvalExpectationInput,
+  })
+  .strict();
+export type EvalCaseManualCreate = z.infer<typeof EvalCaseManualCreate>;
+
+/**
+ * Body of `POST /skills/:id/eval-cases/copy`: copies one agent-owned case into
+ * the skill's own set (the source case is never changed).
+ */
+export const EvalCaseCopyRequest = z
+  .object({
+    case_id: z.string().uuid(),
+  })
+  .strict();
+export type EvalCaseCopyRequest = z.infer<typeof EvalCaseCopyRequest>;
+
+/**
+ * Response of `GET /findings/:id/eval-case/draft` (Spec C): the case a bodiless
+ * `POST /findings/:id/eval-case` would store right now, minus `source`.
+ */
+export const EvalCaseDraft = z.object({
+  finding_id: z.string(),
+  agent_id: z.string(),
+  /** Default auto name (Spec A C-15). */
+  name: z.string(),
+  input_diff: z.string(),
+  /** One path: `expected_output.file`. */
+  input_files: z.array(z.string()),
+  input_meta: EvalCaseMeta,
+  expected_output: EvalExpectationInput,
+});
+export type EvalCaseDraft = z.infer<typeof EvalCaseDraft>;
 
 // ---- Memory ----
 export const MemoryScope = z.enum(['repo', 'global', 'team']);

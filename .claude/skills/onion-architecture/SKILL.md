@@ -10,7 +10,7 @@ description: >-
   repository", "where does this query go", "port", "adapter", "container",
   "transaction", "routes.ts", "transport", "dependency rule".
 metadata:
-  version: 1.0.0
+  version: 1.2.0
 ---
 
 # Onion Architecture (pragmatic, for this repo)
@@ -79,6 +79,11 @@ subprocess, DB) is ring 3; a pure function that happens to live in `adapters/`
 - Services and repositories are obtained from the container (Fastify's plugin
   system is the DI mechanism); never `new`-ed inside a handler. Never decorate
   request/reply with a shared reference type — initialise per request.
+- `routes.ts` building its service once at plugin registration with
+  `XService.fromContainer(container)` is the repo's pattern and is **fine**:
+  it runs at wiring time in ring 4 and hands the service only container
+  getters. Flag a `new Repository(...)` / `new Adapter(...)` in a handler or a
+  service method, not the `fromContainer` factory.
 - Cross-cutting concerns (auth, rate limit, CORS, errors) are hooks/plugins in
   ring 4, not code repeated in routes.
 
@@ -99,6 +104,10 @@ subprocess, DB) is ring 3; a pure function that happens to live in `adapters/`
 - Transactions: the service opens `db.transaction(async (tx) => …)`; repository
   methods accept an optional `tx` and use it when present. A repository never
   opens its own transaction for a multi-repository use case. Thrown error ⇒ rollback.
+- Every write inside the `db.transaction` callback must receive `tx`. A
+  repository call made without it (`this.db` fallback) commits on the pool
+  connection, outside the transaction, and is **not** rolled back — the
+  transaction looks present but does not cover that write.
 - Queries used in a hot path get an index in the schema.
 - Do not add or rewrite migrations from this skill (see CLAUDE.md "Do not touch").
 
@@ -118,6 +127,13 @@ subprocess, DB) is ring 3; a pure function that happens to live in `adapters/`
   on purpose rather than imported.
 - Type-only imports can evade graph tools; treat "no cross-module type imports of
   repository row types" as a convention and use `src/db/rows.ts`.
+- **The whole module folder is private, not just four filenames.** Besides
+  `service`, `repository`, `routes` and `helpers`, it covers orchestrators such
+  as `run-executor.ts`, route schema files (`schemas.ts`), `index.ts` barrels
+  (they re-export the repository) and sub-folders like `smart-diff/`. The only
+  files you may import from another module's folder are its `types.ts` and
+  `constants.ts`, and only for values it publishes as shared. Request-parameter
+  schemas come from `_shared/schemas.ts`; behaviour comes through the container.
 
 ## Testing per ring
 
@@ -155,11 +171,15 @@ present on this branch**, so do not claim they run. Verify before relying on the
 4. Does a repository return a query builder, or open its own transaction for a
    multi-repo use case?
 5. Does a new external call lack a port + mock + container binding?
-6. Does the module import another module's internals?
+6. Does the module import anything from another module's folder other than its
+   `types.ts` / `constants.ts` — an orchestrator (`run-executor`), a `schemas.ts`,
+   an `index.ts` barrel, a sub-folder?
 7. Does the route declare `schema.response`?
 8. Is a new pure rule buried in a service instead of `helpers.ts`?
 9. Did someone add entity classes / use-case folders without real invariants?
 10. Does `reviewer-core` or `e2e` gain an import that breaks its ring?
+11. Inside a service-owned `db.transaction`, does every repository write receive
+    `tx`? A call without it runs outside the transaction.
 
 ## Known gaps
 
@@ -169,5 +189,5 @@ them here; when you fix one, update that entry via `engineering-insights`.
 
 ## Version
 
-`1.0.0`. Bump minor when a rule changes, major when the ring mapping changes;
+`1.2.0`. Bump minor when a rule changes, major when the ring mapping changes;
 update SOURCES.md and README.md together.

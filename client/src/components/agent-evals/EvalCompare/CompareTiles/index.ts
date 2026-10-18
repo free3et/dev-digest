@@ -1,0 +1,1 @@
+export { CompareTiles } from "./CompareTiles";

@@ -37,7 +37,14 @@
       "preview": "Preview",
       "stats": "Stats",
       "versions": "Versions",
-      "context": "Context"
+      "context": "Context",
+      "evals": "Evals"
+    },
+    "runOnEvals": {
+      "label": "Run on evals",
+      "disabledRunning": "An eval run is in progress",
+      "disabledNoCases": "Add an eval case first",
+      "disabledNoHost": "Pick an agent to run this skill's evals"
     }
   },
   "drawer": {

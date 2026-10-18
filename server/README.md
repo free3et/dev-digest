@@ -80,6 +80,9 @@ flowchart TB
     blast["blast<br/>/pulls/:id/blast (GET)"]
     projectContext["project-context<br/>/repos/:id/context (GET) · /repos/:id/context/file (GET, PUT)<br/>/agents/:id/context-docs · /skills/:id/context-docs (GET, PUT)"]
   end
+  subgraph Eval["Eval"]
+    evalMod["eval<br/>/findings/:id/eval-case (POST) · /findings/:id/eval-case/draft (GET) · /findings/:id/eval-case/dry-run (POST)<br/>/agents/:id/eval-cases (GET) · /eval-cases/:id (PATCH, DELETE) · /eval-cases/:id/run (POST)<br/>/skills/:id/eval-cases (GET, POST) · /skills/:id/eval-cases/copy (POST) · /skills/:id/eval-runs (GET, POST)<br/>/agents/:id/eval-runs (GET, POST) · /eval-runs/:id (GET)<br/>/eval/dashboard (GET) · /eval/recent-runs (GET)"]
+  end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
     workspace["workspace<br/>/workspace"]
@@ -194,6 +197,28 @@ Spec: `specs/2026-10-05-project-context-attach.md`. Module: `modules/project-con
   `prompt_assembly.specs` (the section, `null` when empty).
 - Log line, one per run: `project context: N docs, +~T tokens` with
   `, K skipped` appended when K > 0.
+
+## Eval (cases and suite runs)
+
+Module `modules/eval/`. A decided finding becomes a frozen eval case; a suite run
+replays the agent's current config over all of its cases and scores the answers
+in plain code (file equality + line-range intersection, **zero model calls in
+scoring**). Eval runs never write `agent_runs` / `run_traces`. Before saving, a
+client can read the would-be case (`GET /findings/:id/eval-case/draft`) and
+dry-run it (`POST /findings/:id/eval-case/dry-run`: one paid model call, nothing
+stored, 10/min, 16 KB body); `POST /findings/:id/eval-case` then accepts an
+optional `{ name, expected_output }` body that the server re-checks (`422
+file_not_in_diff` / `kind_mismatch`). `GET /eval/recent-runs?limit=` (1..50,
+default 10) lists the newest finished suite runs of every agent, read-only, no
+model call. Specs:
+`specs/2026-10-12-eval-cases-and-scoring.md`,
+`specs/2026-10-12-eval-run-history-compare.md`,
+`specs/2026-10-13-eval-case-modal.md` and
+`specs/2026-10-13-eval-dashboard-compare-polish.md` (Spec D); reference:
+[`docs/eval.md`](docs/eval.md). Gate: `pnpm verify:l06` (needs Docker; fails
+instead of skipping without it).
+
+Skill evals (G1, `specs/2026-10-17-skill-evals-server.md`): a skill owns eval cases (hand-written or copied from an agent case) and runs them through a host agent chosen per run (`POST /skills/:id/eval-runs { agent_id }`) with only that skill in the prompt. Suites record `owner_kind`, `skill_id`, `skill_version` and the host's `agent_id`/`agent_version`; agent history, the dashboard and recent runs list agent suites only. One running suite per owner (two partial unique indexes), so a skill suite never blocks its host's own suite.
 
 ## Testing
 

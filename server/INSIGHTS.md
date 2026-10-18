@@ -20,6 +20,13 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## What Doesn't Work
 
+- **2026-10-16** — Gold anchors for eval cases must be checked against the
+  stored diff, not copied from a finding: reviews ran on older heads, so a
+  finding's `line_start` drifts (the env fallback was reported at another
+  line, really line 11 of `summary-routes.ts`) and scoring's file-equal +
+  line-intersection rule then never matches. Rebuild cases with verified
+  ranges, and never add a `must_not_flag` whose range overlaps a `must_find`
+  (contradictory). `server/src/modules/eval/`, `server/docs/eval.md`
 - **2026-10-07** — "Exactly one model call" is NOT guaranteed by calling
   `completeStructured` once: the real adapters default `maxRetries` to 2 and
   reprompt on a schema failure (up to 3 billed calls), while `MockLLMProvider`
@@ -54,6 +61,14 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Codebase Patterns
 
+- **2026-10-17** — A partial unique index used as an `ON CONFLICT` arbiter
+  needs its FULL predicate repeated in the conflict `where`: after adding
+  `owner_kind` to the running-suite indexes, `insertSuiteRun` must pass
+  `status = 'running' AND owner_kind = …` or a lost race is a 500 ("no unique
+  or exclusion constraint matching the ON CONFLICT specification"), not a 409.
+  Also: `PATCH`/`DELETE`/`POST /eval-cases/:id/run` once read `owner_id` as an
+  agent id without `owner_kind`; they now go through `ownerOf(row)` and
+  `lockOwner`. `server/src/modules/eval/repository.ts`, `service.ts`
 - **2026-10-05** — The clone's working tree is always the default branch:
   `sync` runs `reset --hard origin/<default>`, and a PR head exists only as
   the ref `pr-<n>`. Anything that reads repo files from the tree (e.g. project
@@ -176,6 +191,13 @@ Sections are fixed. Add to the one that fits; never invent a new heading.
 
 ## Recurring Errors & Fixes
 
+- **2026-10-16** — Eval runs on a reasoning model (`deepseek/deepseek-v4-flash`)
+  are mostly `error`: thinking tokens eat `EVAL_MAX_OUTPUT_TOKENS` (4096 ->
+  8192) and then cases hit `EVAL_CASE_TIMEOUT_MS` (60 s -> 120 s), and the
+  scores swing 0.00-0.20 between identical runs. A non-reasoning model
+  (`deepseek/deepseek-chat-v3.1`) finishes 9/9 for ~$0.01/suite; with ~9 cases
+  even that is noise, so v1-vs-v1 spread equals v1-vs-v2 difference. Switch the
+  model temporarily and restore it. `server/src/modules/eval/constants.ts`
 - **2026-10-09** — PR Brief answers `409 brief_unavailable` with a reasoning
   model (`deepseek/deepseek-v4-flash`, `deepseek-v4-pro`) as `risk_brief`: the
   thinking tokens count against `max_tokens`, so with `MAX_OUTPUT_TOKENS = 1500`

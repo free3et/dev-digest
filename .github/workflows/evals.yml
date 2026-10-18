@@ -1,0 +1,139 @@
+name: evals
+
+# Harness evals (skills, agents, workflow). They call a model, so they run only when the harness
+# or an artifact changes, and the per-PR set is chosen by evals/scripts/ci-detect.mjs: a changed
+# skill/agent runs only its own evals; CLAUDE.md or an engine change runs the workflow tier. A
+# changed artifact with no evals is reported as "SKIP (no evals)", not as a failure.
+# Needs the repo Actions secret OPENROUTER_API_KEY (Settings > Secrets and variables > Actions).
+on:
+  pull_request:
+    paths: ['evals/**', '.claude/**', 'CLAUDE.md', '.github/workflows/evals.yml']
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'What to run'
+        type: choice
+        default: skills
+        options: [skills, agents, workflow, all]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.detect.outputs.skills }}
+      skipped_skills: ${{ steps.detect.outputs.skipped_skills }}
+      agents: ${{ steps.detect.outputs.agents }}
+      run_workflow: ${{ steps.detect.outputs.run_workflow }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          else
+            CHANGED_FILES=""
+          fi
+          export CHANGED_FILES
+          node evals/scripts/ci-detect.mjs
+
+  static-gate:
+    # No model: SKILL.md structure, frontmatter and links for every skill.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm eval:quality
+
+  model-evals:
+    needs: detect
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect.outputs.skills != '[]' ||
+      needs.detect.outputs.agents != '[]' ||
+      needs.detect.outputs.run_workflow == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_BASE_URL: http://localhost:4000
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EVAL_MODEL: google/gemini-2.5-flash
+      EVAL_JUDGE_MODEL: google/gemini-2.5-flash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Skip notice
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "skills=${{ needs.detect.outputs.skills }} agents=${{ needs.detect.outputs.agents }} workflow=${{ needs.detect.outputs.run_workflow }}"
+          [ -z "${{ needs.detect.outputs.skipped_skills }}" ] || echo "SKIP (no evals): ${{ needs.detect.outputs.skipped_skills }}"
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+
+      # PR: only the suites ci-detect selected, one tier after another (rate limits).
+      - name: Skill evals (changed skills only)
+        if: github.event_name == 'pull_request' && needs.detect.outputs.skills != '[]'
+        run: |
+          for s in $(echo '${{ needs.detect.outputs.skills }}' | tr ',' ' ' | tr -d '[]"'); do
+            pnpm vitest run "skills/$s"
+          done
+      - name: Agent evals (changed agents only)
+        if: github.event_name == 'pull_request' && needs.detect.outputs.agents != '[]'
+        run: |
+          for a in $(echo '${{ needs.detect.outputs.agents }}' | tr ',' ' ' | tr -d '[]"'); do
+            pnpm vitest run "agents/$a"
+          done
+      - name: Workflow evals
+        if: github.event_name == 'pull_request' && needs.detect.outputs.run_workflow == 'true'
+        run: pnpm eval:workflow
+        continue-on-error: true   # activation cases are behaviour-shaped on non-Anthropic models
+
+      # Manual run: the tier picked in the dispatch form.
+      - name: Manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          case "${{ inputs.tier }}" in
+            skills) pnpm eval:skills ;;
+            agents) pnpm eval:agents ;;
+            workflow) pnpm eval:workflow ;;
+            all) pnpm eval ;;
+          esac
+
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
