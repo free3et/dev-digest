@@ -34,6 +34,29 @@ checking that a similar entry isn't already there. **Do not skip this step.**
 Skip only the writing, and only when nothing non-obvious came up — a typo or a
 routine change is not an insight, and noise costs more than silence.
 
+## Evals — which run after which change
+
+The harness evals live in `evals/` (own `package.json`, **pnpm**; see
+`evals/README.md`). After you change an artifact, run the matching row **before
+you call the change done**, and say what you ran and what it showed.
+
+| You changed | Run (from `evals/`) |
+| ----------- | ------------------- |
+| a skill, `.claude/skills/<name>/**` | `pnpm eval:quality` (static, no model), then `pnpm vitest run skills/<name>` |
+| an agent, `.claude/agents/<name>.md` | `pnpm vitest run agents/<name>` |
+| `CLAUDE.md`, or the description/routing of any skill or agent | `pnpm eval:workflow` |
+| a skill or agent prompt, to prove it got better or worse | `pnpm eval:repeat skills/<name> -n 5 --label baseline` **before** the edit, `--label candidate` **after**, then `pnpm eval:delta baseline candidate` |
+| the product eval pipeline (`server/src/modules/eval/**`, the Evals UI) | `cd server && pnpm verify:l06` and `cd client && pnpm typecheck && pnpm test` |
+
+- A skill without evals is not a failure, but add some: `pnpm eval:scaffold
+  <name>` creates the file trio; write one case that must fire and one that must
+  stay quiet. Skills with evals today: `zod`, `security`, `dependency-checker`.
+- One green run of a probabilistic eval proves little: use `eval:repeat` /
+  `eval:delta` for any "this change is better" claim.
+- Evals spend model quota: run only the row you need, never the whole suite by
+  default. CI runs them for you on PRs that touch `.claude/**`, `evals/**` or
+  `CLAUDE.md` (`.github/workflows/evals.yml`).
+
 ## Stack
 
 Node ≥22 · pnpm ≥10 · TypeScript · Fastify 5 · Next.js 15 / React 19 ·
